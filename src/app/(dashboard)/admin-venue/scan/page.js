@@ -1,9 +1,16 @@
 /**
- * @file src/app/(dashboard)/admin-venue/scan/page.js
- * @description Fitur validasi kehadiran penyewa di lokasi lapangan menggunakan integrasi API kamera browser.
- * @action Memindai E-Ticket barcode hasil enkripsi data UUID reservasi pelanggan.
- * @action Mengubah status reservasi secara riil menjadi CHECKED_IN jika hadir tepat waktu (< 15 menit).
+ * SPORTIX - CORE PAGE COMPONENT
+ * Route Group: (dashboard)
+ * Path: src/app/(dashboard)/admin-venue/scan/page.js
+ * Deskripsi SRS: 
+ * Antarmuka pintu masuk validasi kehadiran penyewa di lokasi fisik. Mengintegrasikan kamera peramban (HTML5 Media Devices API) 
+ * untuk memindai barcode E-Ticket milik customer secara instan, mencocokkan UUID reservasi, dan mengubah status order 
+ * menjadi CHECKED_IN guna mengamankan akurasi audit kehadiran.
  */
-export default function BarcodeScanPage() {
-  return <div className="p-8">Scanner Kamera Browser (HTML5 navigator.mediaDevices)</div>;
+export default function AdminScanPage() {
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-8">
+      <h1 className="text-xl font-bold tracking-wider">Dasbor Admin - Pintu Validasi Pemindaian Barcode Tiket</h1>
+    </div>
+  );
 }
