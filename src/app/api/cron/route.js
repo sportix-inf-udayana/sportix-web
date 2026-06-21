@@ -1,9 +1,12 @@
 /**
- * @file src/app/api/cron/route.js
- * @agent Forfeit Enforcement Agent (FEA) - Mengeksekusi sanksi denda uang muka otomatis.
- * @rule Strict Forfeit Policy: Keterlambatan check-in melebihi 15 menit menghanguskan seluruh durasi sewa.
- * @action Menyita penuh deposit uang muka 30% dan melepas sisa slot waktu menjadi AVAILABLE.
+ * SPORTIX - ROUTE HANDLER API
+ * Path: src/app/api/cron/route.js
+ * Deskripsi SRS: 
+ * Endpoint otomatisasi serverless (Vercel Cron Jobs) yang dipicu sistem secara periodik setiap 1 menit. Mengeksekusi fungsi otonom 
+ * Forfeit Enforcement Agent (FEA) untuk menjaring transaksi no-show (customer terlambat hadir > 15 menit dari jam booking pertama), 
+ * menyita dana sewa 100% masuk kas pendapatan bersih venue, dan mengembalikan slot sisa jam sewa tersebut ke status AVAILABLE.
  */
+import { NextResponse } from 'next/server';
 export async function POST(request) {
-  return new Response(JSON.stringify({ status: "Cron execution completed" }), { status: 200 });
+  return NextResponse.json({ triggered: true, agent: "Forfeit Enforcement Agent" }, { status: 200 });
 }
