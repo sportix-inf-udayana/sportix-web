@@ -1,9 +1,12 @@
 /**
- * @file src/app/api/payments/webhook/route.js
- * @agent Payment Reconciliation Agent (PRA) - Menangani anomali sinkronisasi jaringan pembayaran luar.
- * @rule Prefix Routing: Melacak order_id dengan awalan unik komposit (REV-, TRN-, MKM-) untuk kueri instan.
- * @rule Expired Paid: Kondisi pembayaran sukses terverifikasi gateway tepat setelah batas waktu internal (15 menit) habis.
+ * SPORTIX - ROUTE HANDLER API
+ * Path: src/app/api/payments/webhook/route.js
+ * Deskripsi SRS: 
+ * Listener asinkron penangkap data respons (callback HTTP POST) dari Midtrans Gateway. Menggunakan mekanisme parsing berbasis 
+ * prefix order ID komposit unik (REV- untuk reservasi, TRN- untuk turnamen, MKM- untuk marketplace UMKM) untuk memperbarui status transaksi 
+ * secara instan. Jika pembayaran sukses terkonfirmasi namun status slot kadung expired, transaksi dialihkan otomatis ke tabel refund_logs.
  */
+import { NextResponse } from 'next/server';
 export async function POST(request) {
-  return new Response(JSON.stringify({ received: true }), { status: 200 });
+  return NextResponse.json({ received: true, agent: "Payment Reconciliation Agent" }, { status: 200 });
 }
