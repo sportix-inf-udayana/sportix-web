@@ -73,7 +73,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-slate-900 border border-slate-800/80 rounded-xl shadow-2xl p-8 relative overflow-hidden">
         <div className="mb-8 text-center space-y-2">
           <div className="inline-flex items-center gap-2 text-cyan-400 font-bold tracking-wider text-xs uppercase bg-slate-950 px-3 py-1 rounded-full border border-slate-800">
-            <Activity className="w-3. h-3" /> Sportix Core
+            <Activity className="w-3. h-3" /> Sportix Gate
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Otorisasi Akses</h1>
           <p className="text-sm text-slate-400">Masuk ke dalam ekosistem otonom terpadu.</p>
