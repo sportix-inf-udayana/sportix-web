@@ -150,15 +150,15 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-300">Tipe Aktor (Akses Peran)</label>
+              <label className="block text-sm font-medium text-slate-300">Daftar Sebagai</label>
               <select
                 {...register("role")}
                 className="w-full px-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 appearance-none"
               >
-                <option value="CUSTOMER">Penyewa (Customer)</option>
-                <option value="ADMIN_VENUE">Admin Tempat Usaha (Venue)</option>
-                <option value="COACH">Pelatih Privat (Coach)</option>
-                <option value="UMKM_SELLER">Penjual Produk (UMKM)</option>
+                <option value="CUSTOMER">Penyewa</option>
+                <option value="ADMIN_VENUE">Admin Tempat Usaha</option>
+                <option value="COACH">Pelatih Privat</option>
+                <option value="UMKM_SELLER">Penjual Produk</option>
               </select>
             </div>
           </div>
