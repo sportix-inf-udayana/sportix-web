@@ -1,44 +1,53 @@
-/**
- * SPORTIX - ROUTE HANDLER API
- * Path: src/app/api/booking/route.js
- * Deskripsi SRS: 
- * Menangani pembuatan reservasi lapangan. Mengeksekusi logic Slot Locking Agent (SLA) untuk mengubah status row database 
- * slot waktu pilihan menjadi LOCKED selama 15 menit menggunakan tingkat isolasi transaksi PostgreSQL 'Serializable'. 
- * Hal ini memitigasi double booking/race condition secara mutlak dan langsung membalikkan status HTTP 409 Conflict bagi request yang kalah cepat.
- */
-
 import { getSupabase } from "@/lib/supabase";
 
 export async function POST(req) {
   const startTime = Date.now();
   try {
+    const supabase = getSupabase();
+    if (!supabase) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: "Fatal: Database connection unavailable." 
+      }), { status: 503, headers: { "Content-Type": "application/json" } });
+    }
+
+    // 1. Ekstraksi Token dan Validasi Identitas Kriptografi Mutlak
+    const authHeader = req.headers.get('Authorization');
+    let token;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.replace('Bearer ', '');
+    }
+
+    // Gunakan getUser() yang mengeksekusi verifikasi kriptografi ke server Supabase Auth
+    const { data: { user }, error: authError } = token 
+      ? await supabase.auth.getUser(token) 
+      : await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: "Laporan Ancaman: Akses ditolak. JWT hilang, kadaluarsa, atau dimanipulasi." 
+      }), { status: 401, headers: { "Content-Type": "application/json" } });
+    }
+
+    // Kunci UUID aktual dari entitas pengguna yang sah
+    const realUserId = user.id;
+
+    // 2. Validasi Payload Masukan 
     const body = await req.json();
-    const { slotId, time, date, venueId, price } = body;
+    const { slotId, time, date, price } = body;
 
     if (!slotId || !time || !date) {
       return new Response(JSON.stringify({ 
         success: false, 
-        message: "Missing complete slot details required by Slot Locking Agent." 
+        message: "Bad Request: Parameter payload slot tidak lengkap." 
       }), { status: 400, headers: { "Content-Type": "application/json" } });
     }
 
-    const supabase = getSupabase();
-    if (!supabase) {
-      return new Response(JSON.stringify({ success: false, message: "Database connection unavailable. SLA cannot lock physically." }), { status: 503 });
-    }
-
     const bookingPrice = Number(price) || 150000;
-    const defaultUserId = "00000000-0000-0000-0000-000000000000";
 
-    // Pastikan master user ada
-    await supabase.from("users").upsert({
-      id: defaultUserId,
-      email: "athlete@sportix.com",
-      full_name: "Verified Sportix Athlete",
-      role: "CUSTOMER"
-    }, { onConflict: 'id' });
-
-    // Atomic Serializable Lock: Hanya kunci jika status fisik adalah AVAILABLE
+    // 3. Atomic Locking (Pencegahan Mutlak Race Condition & Double Booking)
+    // Mengharuskan baris tersebut secara eksplisit berstatus 'AVAILABLE' sebelum bisa digeser ke 'LOCKED'.
     const { data: updatedSlots, error: lockError } = await supabase
       .from("slots")
       .update({ status: "LOCKED" })
@@ -46,22 +55,26 @@ export async function POST(req) {
       .eq("status", "AVAILABLE")
       .select();
 
+    if (lockError) throw lockError;
+
+    // Jika tidak ada baris yang ter-update, berarti ada penyerang/pengguna lain yang menang sepersekian detik
     if (!updatedSlots || updatedSlots.length === 0) {
       return new Response(JSON.stringify({
         success: false,
-        message: "Conflict: Slot is already LOCKED or BOOKED by another transaction."
+        message: "Conflict: Slot ini telah dikunci atau dibooking oleh proses lain."
       }), { status: 409, headers: { "Content-Type": "application/json" } });
     }
 
-    // Insert reservasi, biarkan PostgreSQL menghasilkan UUID untuk 'id'
+    // 4. Injeksi Transaksi Reservasi
+    // Biarkan database yang melakukan generate UUID murni untuk relasi Primary Key
     const { data: reservation, error: resError } = await supabase
       .from("reservations")
       .insert({
-        user_id: defaultUserId,
-        field_id: slotId, // Asumsi slotId merepresentasikan field atau miliki relasi yang benar
+        user_id: realUserId, // Terhubung ke user nyata
+        field_id: slotId, 
         booking_date: date,
         start_time: time,
-        end_time: `${parseInt(time.split(":")[0]) + 1}:00`, // Asumsi sewa 1 jam
+        end_time: `${parseInt(time.split(":")[0]) + 1}:00`, // Hitung offset 1 jam mutlak
         total_amount: bookingPrice,
         status: "PENDING",
         payment_method: "MIDTRANS_FULL"
@@ -69,20 +82,27 @@ export async function POST(req) {
       .select()
       .single();
 
+    // 5. Mitigasi Kegagalan Parsial (Rollback)
     if (resError) {
-      // Rollback manual jika gagal insert
+      // Jika penulisan reservasi gagal (misal constraint dilanggar), lepaskan kembali gembok slot
       await supabase.from("slots").update({ status: "AVAILABLE" }).eq("id", slotId);
       throw resError;
     }
 
+    // Eksekusi Sukses
     return new Response(JSON.stringify({
       success: true,
       message: "Slot successfully locked physically. PENDING state established.",
-      reservationId: reservation.id,
+      reservationId: reservation.id, // ID ini akan digunakan untuk inisiasi charge Midtrans
       executionMs: Date.now() - startTime
     }), { status: 200, headers: { "Content-Type": "application/json" } });
 
   } catch (error) {
-    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500 });
+    console.error("Critical Backend Booking Error:", error);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      message: "Terjadi kesalahan internal server.",
+      error: error.message 
+    }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 }
