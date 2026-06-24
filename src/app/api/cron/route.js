@@ -13,119 +13,61 @@ export async function GET(req) {
   const startTime = Date.now();
   try {
     const supabase = getSupabase();
+    if (!supabase) return new Response("DB Offline", { status: 503 });
 
-    if (supabase) {
-      // 1. Fetch current WITA time from database using native DB trigger helper equivalent or RPC
-      let currentWitaTime = new Date().toISOString();
-      try {
-        const { data, error } = await supabase.rpc("get_local_wita_time");
-        if (!error && data) {
-          currentWitaTime = data;
-        }
-      } catch (rpcErr) {
-        console.warn("get_local_wita_time RPC fallback to server ISO time:", rpcErr.message);
-      }
+    let currentWitaTime = new Date().toISOString();
+    try {
+      const { data, error } = await supabase.rpc("get_local_wita_time");
+      if (!error && data) currentWitaTime = data;
+    } catch (rpcErr) {}
 
-      // 2. Query PENDING or active reservations that are late (> 15 mins)
-      // For full compliance, we fetch reservations that are still PENDING and release them
-      const { data: lateReservations, error: fetchErr } = await supabase
-        .from("reservations")
-        .select(`
-          id,
-          slot_id,
-          status,
-          price,
-          user_id,
-          created_at,
-          slots (
-            time,
-            date
-          )
-        `)
-        .eq("status", "PENDING");
+    // Tarik reservasi PENDING beserta data waktu slot aktual
+    const { data: lateReservations, error: fetchErr } = await supabase
+      .from("reservations")
+      .select(`id, field_id, status, total_amount, user_id, booking_date, start_time`)
+      .eq("status", "PENDING");
 
-      if (fetchErr) throw fetchErr;
+    if (fetchErr) throw fetchErr;
 
-      const forfeited = [];
+    const forfeited = [];
+    const currentTimeMs = new Date(currentWitaTime).getTime();
 
-      for (const res of (lateReservations || [])) {
-        const createdAtTime = new Date(res.created_at).getTime();
-        const fifteenMinutesInMs = 15 * 60 * 1000;
+    for (const res of (lateReservations || [])) {
+      // Kalkulasi berbasis jam main aktual, bukan jam transaksi dibuat
+      const slotDateTimeStr = `${res.booking_date}T${res.start_time}+08:00`; // Asumsi WITA UTC+8
+      const slotTimeMs = new Date(slotDateTimeStr).getTime();
+      const fifteenMinutesInMs = 15 * 60 * 1000;
+      
+      if (currentTimeMs - slotTimeMs > fifteenMinutesInMs) {
         
-        // If pending slot check-in is delayed > 15 minutes from reservation creation or slot hour marker
-        if (Date.now() - createdAtTime > fifteenMinutesInMs) {
-          // A: Set reservation to FORFEITED
-          await supabase
-            .from("reservations")
-            .update({ status: "FORFEITED" })
-            .eq("id", res.id);
-
-          // B: Instantly reset associated slot to AVAILABLE
-          if (res.slot_id) {
-            await supabase
-              .from("slots")
-              .update({ state: "AVAILABLE" })
-              .eq("id", res.slot_id);
-          }
-
-          // C: Execute 100% zero-refund financial seizure into ledger_transactions
-          await supabase
-            .from("ledger_transactions")
-            .insert({
-              user_id: res.user_id,
-              amount: res.price,
-              type: "debit_forfeit",
-              description: `100% Zero-Refund Seizure for Late Check-In >15m (ID: ${res.id})`
-            });
-
-          forfeited.push(res.id);
+        await supabase.from("reservations").update({ status: "FORFEITED" }).eq("id", res.id);
+        
+        if (res.field_id) {
+          await supabase.from("slots").update({ status: "AVAILABLE" }).eq("id", res.field_id);
         }
+
+        // Ledger mutlak: sesuai constraint tabel
+        await supabase.from("ledger_transactions").insert({
+          user_id: res.user_id,
+          transaction_type: "DEBIT",
+          source: "FORFEIT_REVENUE",
+          amount: res.total_amount,
+          reservation_id: res.id
+        });
+
+        forfeited.push(res.id);
       }
-
-      return new Response(JSON.stringify({
-        success: true,
-        agent: "FEA (Forfeit Enforcement Agent)",
-        witaTime: currentWitaTime,
-        processed: forfeited.length,
-        forfeitedIds: forfeited,
-        executionMs: Date.now() - startTime
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
-
-    } else {
-      // Sandbox fallback mode
-      return new Response(JSON.stringify({
-        success: true,
-        agent: "FEA (Forfeit Enforcement Agent - Sandbox Simulation)",
-        witaTime: new Date().toLocaleTimeString("id-ID", { timeZone: "Asia/Makassar" }),
-        processed: 1,
-        forfeitedIds: ["REV-992147"],
-        seizureLogs: [
-          {
-            reservationId: "REV-992147",
-            status: "FORFEITED",
-            seizureAmount: 150000,
-            refundStatus: "0% ZERO_REFUND_SEIZURE",
-            slotReset: "AVAILABLE"
-          }
-        ],
-        executionMs: Date.now() - startTime
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
     }
 
-  } catch (error) {
-    console.error("FEA execution failed:", error);
     return new Response(JSON.stringify({
-      success: false,
-      error: error.message
-    }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
+      success: true,
+      agent: "FEA Physical Mode",
+      processed: forfeited.length,
+      forfeitedIds: forfeited,
+      executionMs: Date.now() - startTime
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500 });
   }
 }
