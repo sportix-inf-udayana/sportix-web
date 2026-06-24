@@ -251,7 +251,7 @@ export default function AdminSlotsPage() {
                 </div>
               ) : (
                 <div className="text-center py-12 text-zinc-600 font-mono text-xs">
-                  Pilih "INSPECT" pada slot dengan status BOOKED untuk memeriksa rincian tiket cashless atau melakukan pembatalan paksa.
+                  Pilih &quot;INSPECT&quot; pada slot dengan status BOOKED untuk memeriksa rincian tiket cashless atau melakukan pembatalan paksa.
                 </div>
               )}
             </div>

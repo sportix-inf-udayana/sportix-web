@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import {
   Award,
   CheckCircle,
@@ -96,10 +97,11 @@ export default function TournamentsPage() {
 
             {/* Banner Photo */}
             <div className="relative h-56 bg-zinc-900">
-              <img
+              <Image
                 src="https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&q=80&w=800"
                 alt="Futsal Tournament Kickoff"
-                className="w-full h-full object-cover opacity-30"
+                fill
+                className="object-cover opacity-30"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-surface to-transparent" />
               <div className="absolute bottom-6 left-6">
