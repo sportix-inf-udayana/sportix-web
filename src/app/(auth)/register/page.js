@@ -3,9 +3,10 @@
  * Route Group: (auth)
  * Path: src/app/(auth)/register/page.js
  * Deskripsi SRS: 
- * Portal pendaftaran akun mandiri multi-tenant. Menangani alur registrasi awal pengguna umum (Customer) 
- * maupun calon mitra usaha. Halaman ini memproses unggah dokumen legalitas operasional awal (seperti izin usaha venue, 
- * sertifikat pelatih, identitas toko) sebelum masuk ke dalam antrean kurasi oleh Super Admin.
+ * Portal pendaftaran akun mandiri multi-tenant terintegrasi dengan Supabase Auth.
+ * Menangani alur registrasi awal pengguna umum (Customer) maupun calon mitra usaha. 
+ * Data entitas tambahan disimpan pada metadata pengguna (user_metadata) untuk diproses 
+ * oleh trigger database atau Super Admin di kemudian hari.
  */
 
 "use client";
@@ -15,7 +16,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import axios from "axios";
+import { createBrowserClient } from "@supabase/ssr";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
@@ -67,6 +68,12 @@ export default function RegisterPage() {
   const [serverError, setServerError] = useState(null);
   const [successState, setSuccessState] = useState(false);
 
+  // Inisialisasi Supabase Client
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_ANON_KEY
+  );
+
   const {
     register,
     handleSubmit,
@@ -86,7 +93,28 @@ export default function RegisterPage() {
   const onSubmit = async (data) => {
     setServerError(null);
     try {
-      await axios.post("/api/auth/register", data);
+      // Isolasi data spesifik untuk dimasukkan ke metadata Supabase
+      const metadata = {
+        full_name: data.full_name,
+        role: data.role,
+        ...(data.role === "ADMIN_VENUE" && { venue_name: data.venue_name, venue_address: data.venue_address }),
+        ...(data.role === "COACH" && { specialization: data.specialization, bio: data.bio, price_per_hour: data.price_per_hour }),
+        ...(data.role === "UMKM_SELLER" && { store_name: data.store_name, store_address: data.store_address, store_description: data.store_description }),
+      };
+
+      const { error } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: metadata,
+        },
+      });
+
+      if (error) {
+        setServerError(error.message);
+        return;
+      }
+
       setSuccessState(true);
       
       // Memberi jeda visual agar user memahami notifikasi alur approval SRS Bab 2.5
@@ -94,11 +122,7 @@ export default function RegisterPage() {
         router.push("/login");
       }, 4500);
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        setServerError(error.response?.data?.message || "Registrasi ditolak oleh sistem.");
-      } else {
-        setServerError("Terjadi kesalahan komputasi jaringan.");
-      }
+      setServerError("Terjadi kesalahan komputasi jaringan.");
     }
   };
 
@@ -136,14 +160,14 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-          {/* Baris Utama: Nama & Peran */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="block text-sm font-medium text-slate-300">Nama Lengkap</label>
               <input
                 {...register("full_name")}
                 type="text"
-                className="w-full px-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                disabled={isSubmitting}
+                className="w-full px-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 disabled:opacity-50"
                 placeholder="Putu Maichail"
               />
               {errors.full_name && <p className="text-red-400 text-xs">{errors.full_name.message}</p>}
@@ -153,7 +177,8 @@ export default function RegisterPage() {
               <label className="block text-sm font-medium text-slate-300">Daftar Sebagai</label>
               <select
                 {...register("role")}
-                className="w-full px-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 appearance-none"
+                disabled={isSubmitting}
+                className="w-full px-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 appearance-none disabled:opacity-50"
               >
                 <option value="CUSTOMER">Penyewa</option>
                 <option value="ADMIN_VENUE">Admin Tempat Usaha</option>
@@ -163,14 +188,14 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {/* Kredensial Dasar */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="block text-sm font-medium text-slate-300">Email Akses</label>
               <input
                 {...register("email")}
                 type="email"
-                className="w-full px-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                disabled={isSubmitting}
+                className="w-full px-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 disabled:opacity-50"
                 placeholder="nama@domain.com"
               />
               {errors.email && <p className="text-red-400 text-xs">{errors.email.message}</p>}
@@ -181,15 +206,14 @@ export default function RegisterPage() {
               <input
                 {...register("password")}
                 type="password"
-                className="w-full px-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                disabled={isSubmitting}
+                className="w-full px-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/40 disabled:opacity-50"
                 placeholder="••••••••"
               />
               {errors.password && <p className="text-red-400 text-xs">{errors.password.message}</p>}
             </div>
           </div>
 
-          {/* ================= BLOK MITRA DINAMIS (ANTI SLOP VALIDATION) ================= */}
-          
           {selectedRole === "ADMIN_VENUE" && (
             <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-lg space-y-4 animate-fadeIn">
               <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400">Konfigurasi Struktur Tempat Usaha (Venues)</h3>
@@ -199,7 +223,8 @@ export default function RegisterPage() {
                   <input
                     {...register("venue_name")}
                     type="text"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none border-l-2 border-l-cyan-500"
+                    disabled={isSubmitting}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none border-l-2 border-l-cyan-500 disabled:opacity-50"
                     placeholder="Contoh: Pecatu Futsal Arena"
                   />
                   {errors.venue_name && <p className="text-red-400 text-xs mt-1">{errors.venue_name.message}</p>}
@@ -209,7 +234,8 @@ export default function RegisterPage() {
                   <textarea
                     {...register("venue_address")}
                     rows={2}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none border-l-2 border-l-cyan-500 resize-none"
+                    disabled={isSubmitting}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none border-l-2 border-l-cyan-500 resize-none disabled:opacity-50"
                     placeholder="Jalan Raya Kuta Selatan, Badung, Bali..."
                   />
                   {errors.venue_address && <p className="text-red-400 text-xs mt-1">{errors.venue_address.message}</p>}
@@ -227,7 +253,8 @@ export default function RegisterPage() {
                   <input
                     {...register("specialization")}
                     type="text"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none border-l-2 border-l-cyan-500"
+                    disabled={isSubmitting}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none border-l-2 border-l-cyan-500 disabled:opacity-50"
                     placeholder="Contoh: Bulutangkis Tunggal / Tenis"
                   />
                   {errors.specialization && <p className="text-red-400 text-xs mt-1">{errors.specialization.message}</p>}
@@ -237,7 +264,8 @@ export default function RegisterPage() {
                   <input
                     {...register("price_per_hour")}
                     type="number"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none border-l-2 border-l-cyan-500"
+                    disabled={isSubmitting}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none border-l-2 border-l-cyan-500 disabled:opacity-50"
                     placeholder="150000"
                   />
                   {errors.price_per_hour && <p className="text-red-400 text-xs mt-1">{errors.price_per_hour.message}</p>}
@@ -248,7 +276,8 @@ export default function RegisterPage() {
                 <textarea
                   {...register("bio")}
                   rows={2}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none resize-none"
+                  disabled={isSubmitting}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none resize-none disabled:opacity-50"
                   placeholder="Deskripsikan sertifikasi kepelatihan lokal Anda..."
                 />
               </div>
@@ -264,7 +293,8 @@ export default function RegisterPage() {
                   <input
                     {...register("store_name")}
                     type="text"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none border-l-2 border-l-cyan-500"
+                    disabled={isSubmitting}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none border-l-2 border-l-cyan-500 disabled:opacity-50"
                     placeholder="Contoh: Bali Sport Pro-Shop"
                   />
                   {errors.store_name && <p className="text-red-400 text-xs mt-1">{errors.store_name.message}</p>}
@@ -274,7 +304,8 @@ export default function RegisterPage() {
                   <textarea
                     {...register("store_address")}
                     rows={2}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none border-l-2 border-l-cyan-500 resize-none"
+                    disabled={isSubmitting}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none border-l-2 border-l-cyan-500 resize-none disabled:opacity-50"
                     placeholder="Alamat asal pengiriman kurir lokal Bali..."
                   />
                   {errors.store_address && <p className="text-red-400 text-xs mt-1">{errors.store_address.message}</p>}
@@ -284,7 +315,8 @@ export default function RegisterPage() {
                   <textarea
                     {...register("store_description")}
                     rows={2}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none resize-none"
+                    disabled={isSubmitting}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-white text-sm focus:outline-none resize-none disabled:opacity-50"
                     placeholder="Katalog tipe barang buatan lokal..."
                   />
                 </div>

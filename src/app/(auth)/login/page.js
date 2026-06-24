@@ -3,9 +3,9 @@
  * Route Group: (auth)
  * Path: src/app/(auth)/login/page.js
  * Deskripsi SRS: 
- * Antarmuka gerbang masuk tunggal bagi seluruh aktor ekosistem Sportix (Customer, Admin Venue, Pelatih, Seller UMKM). 
- * Form divalidasi secara ketat dan terhubung langsung dengan sistem token JWT otonom di lapisan middleware global 
- * untuk mencegah bypass akses ilegal serta memastikan pemisahan hak akses (RBAC).
+ * Antarmuka gerbang masuk tunggal bagi seluruh aktor ekosistem Sportix.
+ * Form divalidasi secara ketat dan terhubung langsung dengan Supabase Auth 
+ * untuk mengamankan cookie sisi peramban sebelum middleware mengambil alih perlindungan rute.
  */
 
 "use client";
@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import axios from "axios";
+import { createBrowserClient } from "@supabase/ssr";
 import { Loader2, AlertCircle, Activity } from "lucide-react";
 import Link from "next/link";
 
@@ -37,6 +37,11 @@ export default function LoginPage() {
   const router = useRouter();
   const [serverError, setServerError] = useState(null);
 
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_ANON_KEY
+  );
+
   const {
     register,
     handleSubmit,
@@ -49,22 +54,28 @@ export default function LoginPage() {
   const onSubmit = async (data) => {
     setServerError(null);
     try {
-      const response = await axios.post("/api/auth/login", data);
-      const userRole = response.data?.user?.role;
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
 
+      if (error) {
+        setServerError("Kredensial ditolak server. Pastikan email dan kata sandi valid.");
+        return;
+      }
+
+      // Membaca identitas role dari raw_user_meta_data yang di-set saat proses registrasi
+      const userRole = authData?.user?.user_metadata?.role || "CUSTOMER";
       const targetRoute = ROLE_ROUTES[userRole];
+
       if (targetRoute) {
+        router.refresh(); // Memaksa framework meregenerasi cache status sesi
         router.push(targetRoute);
-        router.refresh();
       } else {
         setServerError("Hak akses peran (role) tidak dikenali oleh sistem.");
       }
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        setServerError(error.response?.data?.message || "Kredensial ditolak server.");
-      } else {
-        setServerError("Terjadi kesalahan jaringan yang tidak terduga.");
-      }
+      setServerError("Terjadi kesalahan jaringan yang tidak terduga.");
     }
   };
 
@@ -93,7 +104,8 @@ export default function LoginPage() {
               {...register("email")}
               type="email"
               autoComplete="email"
-              className={`w-full px-4 py-2.5 bg-slate-950 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 transition-all ${
+              disabled={isSubmitting}
+              className={`w-full px-4 py-2.5 bg-slate-950 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 transition-all disabled:opacity-50 ${
                 errors.email ? "border-red-500 focus:ring-red-500/20" : "border-slate-800 focus:ring-cyan-500/40 focus:border-transparent"
               }`}
               placeholder="nama@institusi.com"
@@ -107,7 +119,8 @@ export default function LoginPage() {
               {...register("password")}
               type="password"
               autoComplete="current-password"
-              className={`w-full px-4 py-2.5 bg-slate-950 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 transition-all ${
+              disabled={isSubmitting}
+              className={`w-full px-4 py-2.5 bg-slate-950 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 transition-all disabled:opacity-50 ${
                 errors.password ? "border-red-500 focus:ring-red-500/20" : "border-slate-800 focus:ring-cyan-500/40 focus:border-transparent"
               }`}
               placeholder="••••••••"
