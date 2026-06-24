@@ -11,6 +11,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import {
   ArrowLeft,
   MapPin,
@@ -66,10 +67,11 @@ export default function VenueDetailPage() {
       <div className="max-w-7xl mx-auto px-6 mt-6">
         {/* Gallery / Cover Image */}
         <div className="relative h-[480px] rounded-xl overflow-hidden mb-8 group shadow-2xl">
-          <img
+          <Image
             src="https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&q=80&w=1200"
             alt="Academy Stadium Pitch"
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-90" />
 

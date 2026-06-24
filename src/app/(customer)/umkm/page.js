@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import {
   Award,
   ShoppingBag,
@@ -163,7 +164,12 @@ export default function UmkmConsignmentPage() {
           {filteredProducts.map((p) => (
             <div key={p.id} className="glass-panel rounded-2xl overflow-hidden flex flex-col justify-between group">
               <div className="h-44 bg-zinc-950 overflow-hidden relative">
-                <img src={p.image} alt={p.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                <Image
+                  src={p.image}
+                  alt={p.name}
+                  fill
+                  className="object-cover transition-transform group-hover:scale-105"
+                />
                 <span className="absolute bottom-3 right-3 bg-black/80 border border-zinc-800 text-micro font-mono px-2 py-0.5 rounded text-zinc-400">
                   Stock: {p.stock}
                 </span>
