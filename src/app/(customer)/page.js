@@ -11,6 +11,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import {
   Search,
   MapPin,
@@ -96,10 +97,13 @@ export default function CustomerMarketplacePage() {
       {/* Immersive Hero Header */}
       <div className="relative h-[420px] overflow-hidden flex items-end">
         <div className="absolute inset-0">
-          <img
+          <Image
             src="https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&q=80&w=1200"
             alt="Academy Stadium Evening"
-            className="w-full h-full object-cover filter brightness-[0.35]"
+            fill
+            sizes="100vw"
+            unoptimized
+            className="object-cover filter brightness-[0.35]"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
         </div>
@@ -190,10 +194,13 @@ export default function CustomerMarketplacePage() {
               >
                 {/* Image & Badges */}
                 <div className="relative h-48 overflow-hidden bg-zinc-950">
-                  <img
+                  <Image
                     src={venue.image}
                     alt={venue.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    fill
+                    sizes="100vw"
+                    unoptimized
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                   {venue.isPopular && (
                     <div className="absolute top-3 left-3 bg-brand-emerald text-black text-micro font-mono font-black px-2 py-0.5 rounded tracking-wider uppercase glow-emerald">

@@ -200,7 +200,7 @@ export default function SuperAdminVerificationsPage() {
                 </div>
               ) : (
                 <div className="text-center py-12 text-zinc-600 font-mono text-xs">
-                  Pilih "REVIEW" pada pengajuan stadion di sebelah kiri untuk memeriksa kelengkapan berkas kepatuhan hukum.
+                  Pilih &quot;REVIEW&quot; pada pengajuan stadion di sebelah kiri untuk memeriksa kelengkapan berkas kepatuhan hukum.
                 </div>
               )}
             </div>
