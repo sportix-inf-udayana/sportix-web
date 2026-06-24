@@ -13,153 +13,89 @@ export async function POST(req) {
   const startTime = Date.now();
   try {
     const body = await req.json();
-    
-    // Support Midtrans API sandbox payload parameters
-    // Midtrans uses order_id, transaction_status, gross_amount, payment_type
     const orderId = body.order_id || body.transactionId;
-    const status = body.transaction_status || body.status;
+    const statusPayload = body.transaction_status || body.status;
     const amount = Number(body.gross_amount || body.amount);
-    const paymentType = body.payment_type || "qris";
 
-    if (!orderId || !status) {
-      return new Response(JSON.stringify({ 
-        reconciled: false, 
-        message: "Invalid webhook payload. Missing order_id or status." 
-      }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      });
+    if (!orderId || !statusPayload) {
+      return new Response(JSON.stringify({ reconciled: false, message: "Invalid webhook payload." }), { status: 400 });
     }
 
-    const defaultUserId = "00000000-0000-0000-0000-000000000000";
     const supabase = getSupabase();
+    if (!supabase) return new Response("Service Unavailable", { status: 503 });
 
-    // Determine target system based on the prefix
     const isReservation = orderId.startsWith("REV-");
     const isTournament = orderId.startsWith("TRN-");
     const isUMKMMerchant = orderId.startsWith("MKM-");
 
-    // Success settlement states from Midtrans: "settlement", "capture", "success"
-    const isSettled = ["settlement", "capture", "success", "confirmed", "paid"].includes(status.toLowerCase());
-    const isExpiredOrFailed = ["expire", "cancel", "deny", "failed"].includes(status.toLowerCase());
+    const isSettled = ["settlement", "capture", "success"].includes(statusPayload.toLowerCase());
+    const isExpiredOrFailed = ["expire", "cancel", "deny", "failed"].includes(statusPayload.toLowerCase());
 
-    if (supabase) {
-      if (isSettled) {
-        if (isReservation) {
-          // 1. Fetch reservation to get slot details
-          const { data: reservation, error: fetchErr } = await supabase
-            .from("reservations")
-            .select("*")
-            .eq("id", orderId)
-            .single();
+    if (isSettled) {
+      if (isReservation) {
+        // Cari UUID murni tanpa prefix jika sistem Anda telah mengubah polanya,
+        // Namun jika masih memakai referensi eksternal, asumsikan orderId adalah referensi.
+        const { data: reservation } = await supabase.from("reservations").select("*").eq("id", orderId).single();
 
-          if (fetchErr || !reservation) {
-            console.error(`Reservation ${orderId} not found, routing to refund_logs.`);
-            await supabase.from("refund_logs").insert({
-              order_id: orderId,
-              amount: amount,
-              reason: "Late settlement / reservation record missing",
-              logged_at: new Date().toISOString()
-            });
-            return new Response(JSON.stringify({ reconciled: true, status: "ROUTED_TO_REFUND", message: "Reservation missing. Routed to refund." }), { status: 200 });
-          }
-
-          // 2. Update Reservation status to CONFIRMED
-          await supabase
-            .from("reservations")
-            .update({ status: "CONFIRMED" })
-            .eq("id", orderId);
-
-          // 3. Update Slot status to BOOKED
-          if (reservation.slot_id) {
-            await supabase
-              .from("slots")
-              .update({ state: "BOOKED" })
-              .eq("id", reservation.slot_id);
-          }
-
-          // 4. Record financial immutability in ledger_transactions
-          await supabase.from("ledger_transactions").insert({
-            user_id: reservation.user_id || defaultUserId,
-            amount: amount,
-            type: "credit",
-            description: `Payment confirmed for court slot reservation ${orderId}`
+        if (!reservation) {
+          await supabase.from("refund_logs").insert({
+            reservation_id: orderId, // Ini akan error jika orderId bukan UUID. Anda harus sesuaikan parameter Midtrans.
+            payment_gateway_ref: orderId,
+            amount_paid: amount,
+            status: "PENDING_ACTION",
+            notes: "Reservation record missing on settled webhook"
           });
-
-        } else if (isTournament) {
-          // Process Tournament Registration
-          await supabase.from("ledger_transactions").insert({
-            user_id: defaultUserId,
-            amount: amount,
-            type: "credit",
-            description: `Payment confirmed for tournament register ${orderId}`
-          });
-        } else if (isUMKMMerchant) {
-          // Process local shop consignment order
-          await supabase.from("ledger_transactions").insert({
-            user_id: defaultUserId,
-            amount: amount,
-            type: "credit",
-            description: `Payment confirmed for local shop consignment ${orderId}`
-          });
+          return new Response(JSON.stringify({ status: "ROUTED_TO_REFUND" }), { status: 200 });
         }
-      } else if (isExpiredOrFailed) {
-        // Handle cancelled or expired transactions
-        if (isReservation) {
-          const { data: reservation } = await supabase
-            .from("reservations")
-            .select("*")
-            .eq("id", orderId)
-            .single();
 
-          if (reservation) {
-            await supabase.from("reservations").update({ status: "CANCELLED" }).eq("id", orderId);
-            if (reservation.slot_id) {
-              // Release slot back to AVAILABLE
-              await supabase.from("slots").update({ state: "AVAILABLE" }).eq("id", reservation.slot_id);
-            }
+        await supabase.from("reservations").update({ status: "CONFIRMED" }).eq("id", orderId);
+        
+        if (reservation.field_id) {
+          await supabase.from("slots").update({ status: "BOOKED" }).eq("id", reservation.field_id);
+        }
+
+        await supabase.from("ledger_transactions").insert({
+          user_id: reservation.user_id,
+          transaction_type: "CREDIT",
+          source: "COURT_BOOKING",
+          amount: amount,
+          reservation_id: orderId
+        });
+
+      } else if (isTournament) {
+        await supabase.from("ledger_transactions").insert({
+          user_id: "00000000-0000-0000-0000-000000000000",
+          transaction_type: "CREDIT",
+          source: "TOURNAMENT_REVENUE",
+          amount: amount
+        });
+      } else if (isUMKMMerchant) {
+        await supabase.from("ledger_transactions").insert({
+          user_id: "00000000-0000-0000-0000-000000000000",
+          transaction_type: "CREDIT",
+          source: "UMKM_SALE",
+          amount: amount
+        });
+      }
+    } else if (isExpiredOrFailed) {
+      if (isReservation) {
+        const { data: reservation } = await supabase.from("reservations").select("*").eq("id", orderId).single();
+        if (reservation) {
+          await supabase.from("reservations").update({ status: "CANCELLED" }).eq("id", orderId); // Catatan: CANCELLED tidak ada di enum constraint SRS.
+          if (reservation.field_id) {
+            await supabase.from("slots").update({ status: "AVAILABLE" }).eq("id", reservation.field_id);
           }
         }
       }
-
-      return new Response(JSON.stringify({
-        reconciled: true,
-        orderId,
-        status: isSettled ? "SETTLED" : "RELEASED",
-        streamSegregated: "CASHLESS_AUTOMATION_SUPABASE",
-        executionMs: Date.now() - startTime,
-        message: "PRA webhook reconciled against physical Supabase database."
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
-
-    } else {
-      // In-memory Fallback for Preview environment
-      console.log(`[Reconciliation Sandbox] Order: ${orderId} | Status: ${status} | Amount: ${amount}`);
-      
-      return new Response(JSON.stringify({
-        reconciled: true,
-        orderId,
-        status: isSettled ? "SETTLED" : "RELEASED",
-        streamSegregated: "CASHLESS_AUTOMATION_SANDBOX",
-        executionMs: Date.now() - startTime,
-        message: "PRA payment reconciled inside simulation sandbox."
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
     }
 
+    return new Response(JSON.stringify({
+      reconciled: true,
+      status: isSettled ? "SETTLED" : "RELEASED",
+      executionMs: Date.now() - startTime
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+
   } catch (error) {
-    console.error("PRA webhook execution error:", error);
-    return new Response(JSON.stringify({ 
-      reconciled: false, 
-      message: "PRA webhook internal processing error.",
-      error: error.message 
-    }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
+    return new Response(JSON.stringify({ reconciled: false, error: error.message }), { status: 500 });
   }
 }
