@@ -1,12 +1,3 @@
-/**
- * SPORTIX - ROUTE HANDLER API
- * Path: src/app/api/cron/route.js
- * Deskripsi SRS: 
- * Endpoint otomatisasi serverless (Vercel Cron Jobs) yang dipicu sistem secara periodik setiap 1 menit. Mengeksekusi fungsi otonom 
- * Forfeit Enforcement Agent (FEA) untuk menjaring transaksi no-show (customer terlambat hadir > 15 menit dari jam booking pertama), 
- * menyita dana sewa 100% masuk kas pendapatan bersih venue, dan mengembalikan slot sisa jam sewa tersebut ke status AVAILABLE.
- */
-
 import { getSupabase } from "@/lib/supabase";
 
 export async function GET(req) {
@@ -15,55 +6,69 @@ export async function GET(req) {
     const supabase = getSupabase();
     if (!supabase) return new Response("DB Offline", { status: 503 });
 
-    let currentWitaTime = new Date().toISOString();
+    // 1. Dapatkan tanggal hari ini di zona WITA
+    let reportDate = new Date().toISOString().split('T')[0]; // Fallback
     try {
       const { data, error } = await supabase.rpc("get_local_wita_time");
-      if (!error && data) currentWitaTime = data;
+      if (!error && data) {
+        reportDate = data.split('T')[0]; // Ambil YYYY-MM-DD
+      }
     } catch (rpcErr) {}
 
-    // Tarik reservasi PENDING beserta data waktu slot aktual
-    const { data: lateReservations, error: fetchErr } = await supabase
-      .from("reservations")
-      .select(`id, field_id, status, total_amount, user_id, booking_date, start_time`)
-      .eq("status", "PENDING");
+    // 2. Tarik semua transaksi ledger hari ini untuk pengelompokan (Hanya CREDIT dan FORFEIT)
+    // Asumsi: Semua revenue masuk via ledger_transactions untuk menjaga single source of truth
+    const { data: todayTransactions, error: fetchErr } = await supabase
+      .from("ledger_transactions")
+      .select("amount, source, reservation_id, reservations(field_id, status)")
+      .gte("created_at", `${reportDate}T00:00:00+08:00`)
+      .lt("created_at", `${reportDate}T23:59:59+08:00`);
 
     if (fetchErr) throw fetchErr;
 
-    const forfeited = [];
-    const currentTimeMs = new Date(currentWitaTime).getTime();
+    // 3. Agregasi data per venue (melalui field_id di relasi reservations)
+    // Catatan: Anda perlu JOIN ke fields lalu ke venues jika arsitekturnya kompleks, 
+    // ini adalah agregasi dasar berdasarkan data ledger.
+    let venueStats = {};
 
-    for (const res of (lateReservations || [])) {
-      // Kalkulasi berbasis jam main aktual, bukan jam transaksi dibuat
-      const slotDateTimeStr = `${res.booking_date}T${res.start_time}+08:00`; // Asumsi WITA UTC+8
-      const slotTimeMs = new Date(slotDateTimeStr).getTime();
-      const fifteenMinutesInMs = 15 * 60 * 1000;
+    (todayTransactions || []).forEach(trx => {
+      // Lewati jika bukan transaksi terkait lapangan (misal UMKM/Turnamen)
+      if (trx.source !== 'COURT_BOOKING' && trx.source !== 'FORFEIT_REVENUE') return;
       
-      if (currentTimeMs - slotTimeMs > fifteenMinutesInMs) {
-        
-        await supabase.from("reservations").update({ status: "FORFEITED" }).eq("id", res.id);
-        
-        if (res.field_id) {
-          await supabase.from("slots").update({ status: "AVAILABLE" }).eq("id", res.field_id);
-        }
-
-        // Ledger mutlak: sesuai constraint tabel
-        await supabase.from("ledger_transactions").insert({
-          user_id: res.user_id,
-          transaction_type: "DEBIT",
-          source: "FORFEIT_REVENUE",
-          amount: res.total_amount,
-          reservation_id: res.id
-        });
-
-        forfeited.push(res.id);
+      const venueId = trx.reservations?.fields?.venue_id || "DEFAULT_VENUE_ID"; // Sesuaikan JOIN fisik Anda
+      
+      if (!venueStats[venueId]) {
+        venueStats[venueId] = { opRev: 0, forfeitRev: 0, bookings: 0, noShows: 0 };
       }
-    }
+
+      if (trx.source === 'COURT_BOOKING') {
+        venueStats[venueId].opRev += Number(trx.amount);
+        venueStats[venueId].bookings += 1;
+      } else if (trx.source === 'FORFEIT_REVENUE') {
+        venueStats[venueId].forfeitRev += Number(trx.amount);
+        venueStats[venueId].noShows += 1;
+      }
+    });
+
+    // 4. Eksekusi Upsert ke revenue_reports
+    const upsertPromises = Object.keys(venueStats).map(vId => {
+      return supabase.from("revenue_reports").upsert({
+        venue_id: vId,
+        report_date: reportDate,
+        operational_revenue: venueStats[vId].opRev,
+        forfeited_revenue: venueStats[vId].forfeitRev,
+        total_bookings: venueStats[vId].bookings,
+        total_no_shows: venueStats[vId].noShows,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'venue_id, report_date' });
+    });
+
+    await Promise.all(upsertPromises);
 
     return new Response(JSON.stringify({
       success: true,
-      agent: "FEA Physical Mode",
-      processed: forfeited.length,
-      forfeitedIds: forfeited,
+      agent: "ARA (Analytics Reporting Agent)",
+      dateProcessed: reportDate,
+      venuesAggregated: Object.keys(venueStats).length,
       executionMs: Date.now() - startTime
     }), { status: 200, headers: { "Content-Type": "application/json" } });
 

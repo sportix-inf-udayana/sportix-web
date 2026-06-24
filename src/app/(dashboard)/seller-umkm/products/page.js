@@ -1,13 +1,3 @@
-/**
- * SPORTIX - CORE PAGE COMPONENT
- * Route Group: (dashboard)
- * Path: src/app/(dashboard)/seller-umkm/products/page.js
- * Deskripsi SRS: 
- * Panel manajemen katalog bagi pelaku usaha UMKM lokal Bali. Berfungsi untuk menambahkan komoditas produk baru, 
- * memantau kuantitas stok barang fisik yang dititipkan pada pro-shop, mengubah harga, serta memantau data 
- * ketetapan margin konsinyasi bagi pihak venue.
- */
-
 "use client";
 
 import React, { useState } from "react";
@@ -16,7 +6,6 @@ import {
   Plus, 
   Trash2, 
   RefreshCw, 
-  Tag, 
   ShoppingBag,
   Truck,
   Layers,
@@ -84,25 +73,25 @@ export default function SellerProductsPage() {
   };
 
   return (
-    <div className="bg-[#09090b] text-[#e5e2e1] min-h-screen pb-16 font-sans select-none">
+    <div className="bg-background text-foreground min-h-screen pb-16 font-sans select-none">
       
       {/* Top Header & Navigation Switch */}
-      <div className="border-b border-zinc-800 bg-[#0e0e0e] sticky top-0 z-50">
+      <div className="border-b border-zinc-800 bg-surface-elevated sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
               <Briefcase className="w-4 h-4" />
             </div>
             <div>
-              <span className="text-[10px] font-mono text-zinc-500 block leading-none">MERCHANT PORTAL</span>
-              <h2 className="text-base font-black text-white">UMKM Seller Portal</h2>
+              <span className="text-micro font-mono text-zinc-500 block leading-none">MERCHANT PORTAL</span>
+              <h2 className="text-base font-black text-white font-display">UMKM Seller Portal</h2>
             </div>
           </div>
 
-          <div className="flex bg-[#131313] border border-zinc-800/80 p-1 rounded-lg">
+          <div className="flex bg-surface border border-zinc-800/80 p-1 rounded-lg">
             <button 
               onClick={() => navigateTo("/seller-umkm/products")}
-              className="bg-[#1c1b1b] text-white px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 border border-zinc-800"
+              className="bg-surface-hover text-white px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 border border-zinc-800"
             >
               <Layers className="w-3.5 h-3.5 text-purple-400" />
               <span>INVENTORY MGR</span>
@@ -120,7 +109,7 @@ export default function SellerProductsPage() {
 
       <div className="max-w-7xl mx-auto px-6 mt-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-black text-white">Inventory Management</h1>
+          <h1 className="text-2xl font-black text-white font-display">Inventory Management</h1>
           <p className="text-zinc-400 text-xs md:text-sm mt-1">
             Katalog pengontrol pasokan barang olahraga lokal di Bali. Pasok stok baru, ubah harga jual, dan kelola listing konsinyasi Anda secara instan.
           </p>
@@ -129,8 +118,8 @@ export default function SellerProductsPage() {
         {/* Dual Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* Active Inventory Catalogue controller table (8 Columns) */}
-          <div className="lg:col-span-8 bg-[#131313] border border-zinc-800 rounded-xl p-6">
+          {/* Active Inventory Catalogue controller table */}
+          <div className="lg:col-span-8 bg-surface border border-zinc-800 rounded-xl p-6">
             <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-6 flex items-center gap-1.5">
               <ShoppingBag className="w-4 h-4 text-purple-400" /> ACTIVE CONSIGNMENT GOODS ({products.length})
             </h3>
@@ -148,7 +137,7 @@ export default function SellerProductsPage() {
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60 font-mono">
                   {products.map((p) => (
-                    <tr key={p.id} className="hover:bg-[#18181b]/40">
+                    <tr key={p.id} className="hover:bg-surface-hover/40">
                       <td className="py-4 font-sans font-bold text-white pr-2">
                         {p.name}
                       </td>
@@ -162,14 +151,14 @@ export default function SellerProductsPage() {
                         <div className="flex items-center justify-center gap-2">
                           <button 
                             onClick={() => handleUpdateStock(p.id, -1)}
-                            className="w-5 h-5 bg-[#0e0e0e] border border-zinc-800 rounded text-zinc-400 font-bold flex items-center justify-center hover:border-zinc-700 transition-all"
+                            className="w-5 h-5 bg-surface-elevated border border-zinc-800 rounded text-zinc-400 font-bold flex items-center justify-center hover:border-zinc-700 transition-all"
                           >
                             -
                           </button>
                           <span className="text-white font-bold w-6 text-center">{p.stock}</span>
                           <button 
                             onClick={() => handleUpdateStock(p.id, 1)}
-                            className="w-5 h-5 bg-[#0e0e0e] border border-zinc-800 rounded text-zinc-400 font-bold flex items-center justify-center hover:border-zinc-700 transition-all"
+                            className="w-5 h-5 bg-surface-elevated border border-zinc-800 rounded text-zinc-400 font-bold flex items-center justify-center hover:border-zinc-700 transition-all"
                           >
                             +
                           </button>
@@ -191,16 +180,16 @@ export default function SellerProductsPage() {
             </div>
           </div>
 
-          {/* Add New Consignment Product (4 Columns) */}
+          {/* Add New Consignment Product */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="bg-[#131313] border border-zinc-800 rounded-xl p-6">
+            <div className="bg-surface border border-zinc-800 rounded-xl p-6">
               <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-4 flex items-center gap-1">
                 <Plus className="w-4 h-4" /> ADD CONSIGNMENT GOODS
               </h3>
 
               <form onSubmit={handleAddProduct} className="space-y-4 text-xs">
                 <div>
-                  <label className="text-zinc-400 block mb-1 uppercase tracking-wide font-mono text-[10px]">
+                  <label className="text-zinc-400 block mb-1 uppercase tracking-wide font-mono text-micro">
                     Nama Produk Olahraga
                   </label>
                   <input
@@ -208,18 +197,18 @@ export default function SellerProductsPage() {
                     placeholder="e.g., Strike Jersey Black"
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
-                    className="w-full bg-[#0e0e0e] border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-[#e5e2e1] outline-none placeholder-zinc-700"
+                    className="w-full bg-surface-elevated border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-foreground outline-none placeholder-zinc-700"
                   />
                 </div>
 
                 <div>
-                  <label className="text-zinc-400 block mb-1 uppercase tracking-wide font-mono text-[10px]">
+                  <label className="text-zinc-400 block mb-1 uppercase tracking-wide font-mono text-micro">
                     Kategori
                   </label>
                   <select
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value)}
-                    className="w-full bg-[#0e0e0e] border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-[#e5e2e1] outline-none"
+                    className="w-full bg-surface-elevated border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-foreground outline-none"
                   >
                     <option value="Shoes">Shoes</option>
                     <option value="Apparel">Apparel</option>
@@ -228,7 +217,7 @@ export default function SellerProductsPage() {
                 </div>
 
                 <div>
-                  <label className="text-zinc-400 block mb-1 uppercase tracking-wide font-mono text-[10px]">
+                  <label className="text-zinc-400 block mb-1 uppercase tracking-wide font-mono text-micro">
                     Harga Konsinyasi (Rupiah)
                   </label>
                   <input
@@ -236,12 +225,12 @@ export default function SellerProductsPage() {
                     placeholder="e.g., 850000"
                     value={newPrice}
                     onChange={(e) => setNewPrice(e.target.value)}
-                    className="w-full bg-[#0e0e0e] border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-[#e5e2e1] outline-none placeholder-zinc-700 font-mono"
+                    className="w-full bg-surface-elevated border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-foreground outline-none placeholder-zinc-700 font-mono"
                   />
                 </div>
 
                 <div>
-                  <label className="text-zinc-400 block mb-1 uppercase tracking-wide font-mono text-[10px]">
+                  <label className="text-zinc-400 block mb-1 uppercase tracking-wide font-mono text-micro">
                     Stok Awal
                   </label>
                   <input
@@ -249,7 +238,7 @@ export default function SellerProductsPage() {
                     placeholder="e.g., 20"
                     value={newStock}
                     onChange={(e) => setNewStock(e.target.value)}
-                    className="w-full bg-[#0e0e0e] border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-[#e5e2e1] outline-none placeholder-zinc-700 font-mono"
+                    className="w-full bg-surface-elevated border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-foreground outline-none placeholder-zinc-700 font-mono"
                   />
                 </div>
 
