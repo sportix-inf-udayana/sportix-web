@@ -1,55 +1,45 @@
-"use client";
+import React from "react";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import Link from "next/link";
+import { Shield, TrendingUp, Sliders, AlertTriangle } from "lucide-react";
+import VerificationClient from "../../../../components/super-admin/VerificationClient";
 
-import React, { useState } from "react";
-import { 
-  Shield, 
-  Eye, 
-  FileText,
-  TrendingUp,
-  Sliders
-} from "lucide-react";
-
-export default function SuperAdminVerificationsPage() {
-  const [venues, setVenues] = useState([
-    { id: "V-901", name: "Kuta Futsal Center", location: "Kuta Road, Badung", applicant: "Wayan Sukarta", status: "PENDING", date: "WE 24 Oct" },
-    { id: "V-902", name: "Sanur Badminton Hall", location: "Bypass Sanur, Denpasar", applicant: "Agus Wijaya", status: "PENDING", date: "WE 24 Oct" },
-    { id: "V-903", name: "Ubud Tennis Palace", location: "Ubud Peak, Gianyar", applicant: "Ketut Adi", status: "APPROVED", date: "MO 22 Oct" }
-  ]);
-
-  const [selectedVenue, setSelectedVenue] = useState(null);
-
-  const handleApprove = (id) => {
-    setVenues(venues.map(v => {
-      if (v.id === id) {
-        return { ...v, status: "APPROVED" };
-      }
-      return v;
-    }));
-    if (selectedVenue && selectedVenue.id === id) {
-      setSelectedVenue(null);
+export default async function SuperAdminVerificationsPage() {
+  const cookieStore = cookies();
+  
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+      },
     }
-    alert(`Stadion ${id} berhasil disetujui! Kompleks telah aktif di exploration engine.`);
-  };
+  );
 
-  const handleReject = (id) => {
-    setVenues(venues.map(v => {
-      if (v.id === id) {
-        return { ...v, status: "REJECTED" };
-      }
-      return v;
-    }));
-    if (selectedVenue && selectedVenue.id === id) {
-      setSelectedVenue(null);
-    }
-    alert(`Pengajuan stadion ${id} ditolak.`);
-  };
+  // 1. Verifikasi Lapis Server Edge
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return <div className="p-8 text-red-500 font-mono text-center">Sesi Ilegal. Akses Ditolak.</div>;
+  }
 
-  const navigateTo = (path) => {
-    window.location.hash = path;
-    if (window.__sportixNavigate) {
-      window.__sportixNavigate(path);
-    }
-  };
+  // 2. Tarik Data Nyata (Real Database Fetching)
+  // Hanya ambil venue yang berstatus PENDING
+  const { data: pendingVenues, error: fetchErr } = await supabase
+    .from("venues")
+    .select("id, name, address, status, owner_id")
+    .eq("status", "PENDING")
+    .order("created_at", { ascending: true });
+
+  if (fetchErr) {
+    return (
+      <div className="max-w-7xl mx-auto p-6 mt-10 text-center border border-red-500/30 bg-red-500/10 rounded-xl">
+        <AlertTriangle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+        <p className="text-white font-mono text-sm">Gagal memuat koneksi ke database master.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-background text-foreground min-h-screen pb-16 font-sans select-none">
@@ -63,150 +53,40 @@ export default function SuperAdminVerificationsPage() {
             </div>
             <div>
               <span className="text-micro font-mono text-zinc-500 block leading-none">SUPER COMMAND SUITE</span>
-              <h2 className="text-base font-black text-foreground font-display">Super Admin Console</h2>
+              <h2 className="text-base font-black text-white font-display">Super Admin Console</h2>
             </div>
           </div>
 
           <div className="flex bg-surface border border-zinc-800/80 p-1 rounded-lg">
-            <button 
-              onClick={() => navigateTo("/super-admin/verifications")}
-              className="bg-surface-hover text-foreground px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 border border-zinc-800"
+            <Link 
+              href="/super-admin/verifications"
+              className="bg-surface-hover text-white px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 border border-zinc-800"
             >
               <Sliders className="w-3.5 h-3.5 text-red-400" />
               <span>ONBOARDING QUEUE</span>
-            </button>
-            <button 
-              onClick={() => navigateTo("/super-admin/audits")}
+            </Link>
+            <Link 
+              href="/super-admin/audits"
               className="text-zinc-500 hover:text-zinc-300 px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
             >
               <TrendingUp className="w-3.5 h-3.5" />
               <span>GLOBAL LEDGER</span>
-            </button>
+            </Link>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-6 mt-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-black text-foreground font-display">Stadium Onboarding Queue</h1>
+          <h1 className="text-2xl font-black text-white font-display">Stadium Onboarding Queue</h1>
           <p className="text-zinc-400 text-xs md:text-sm mt-1">
-            Verifikasi kelayakan stadion, lapangan futsal, dan sarana olahraga baru sebelum resmi terdaftar di exploration engine nasional Sportix.
+            Data disinkronisasi langsung secara real-time dari database master PostgreSQL. Setujui atau tolak izin operasional ekosistem di bawah ini.
           </p>
         </div>
 
-        {/* Dual Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* Onboarding Table (8 Columns) */}
-          <div className="lg:col-span-8 bg-surface border border-zinc-800 rounded-xl p-6">
-            <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-6 flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-red-400" /> STADIUM APPLICATION LIST
-            </h3>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-zinc-800 font-mono text-zinc-500 uppercase">
-                    <th className="pb-3 font-semibold">ID / Nama Venue</th>
-                    <th className="pb-3 font-semibold">Lokasi</th>
-                    <th className="pb-3 font-semibold">Pendaftar</th>
-                    <th className="pb-3 font-semibold">Status</th>
-                    <th className="pb-3 font-semibold text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60 font-mono">
-                  {venues.map((v) => (
-                    <tr key={v.id} className="hover:bg-surface-hover/40">
-                      <td className="py-4 pr-2">
-                        <div className="font-sans font-bold text-foreground text-xs">{v.name}</div>
-                        <span className="text-micro text-zinc-500">{v.id} • {v.date}</span>
-                      </td>
-                      <td className="py-4 text-zinc-400 font-sans">
-                        {v.location}
-                      </td>
-                      <td className="py-4 text-zinc-300 font-sans">
-                        {v.applicant}
-                      </td>
-                      <td className="py-4">
-                        <span className={`text-micro font-mono font-bold px-2 py-0.5 rounded uppercase tracking-wide ${
-                          v.status === "PENDING" ? "bg-brand-amber/15 text-brand-amber border border-brand-amber/20" :
-                          v.status === "REJECTED" ? "bg-red-500/15 text-red-400 border border-red-500/20" :
-                          "bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/20"
-                        }`}>
-                          {v.status}
-                        </span>
-                      </td>
-                      <td className="py-4 text-right">
-                        <button
-                          onClick={() => setSelectedVenue(v)}
-                          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/60 p-1.5 rounded text-micro font-mono flex items-center gap-1 cursor-pointer ml-auto"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-brand-neon" />
-                          <span>REVIEW</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Review Sidebar Document Viewer (4 Columns) */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className="bg-surface border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-4">
-                DOCUMENT REVIEW PANEL
-              </h3>
-
-              {selectedVenue ? (
-                <div className="space-y-4 text-xs font-mono">
-                  <div className="bg-surface-elevated border border-zinc-800/80 p-4 rounded-lg space-y-3">
-                    <div>
-                      <span className="text-zinc-500 text-micro uppercase">VENUE ID</span>
-                      <div className="text-foreground font-bold">{selectedVenue.id}</div>
-                    </div>
-                    <div>
-                      <span className="text-zinc-500 text-micro uppercase">OFFICIAL REGISTERED NAME</span>
-                      <div className="text-foreground font-bold font-sans text-xs">{selectedVenue.name}</div>
-                    </div>
-                    <div>
-                      <span className="text-zinc-500 text-micro uppercase">SUBMISSION APPLICANT</span>
-                      <div className="text-foreground font-sans text-xs">{selectedVenue.applicant} (Owner)</div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-red-950/20 border border-red-500/20 rounded text-micro text-zinc-400 leading-normal font-sans">
-                    <strong>REGULATORY WARNING:</strong>
-                    Persetujuan stadion memberikan hak akses bagi pengelola untuk menerbitkan court slots, memungut pembayaran cashless, serta menegakkan sanksi forfeit 15-menit.
-                  </div>
-
-                  {selectedVenue.status === "PENDING" && (
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                      <button
-                        onClick={() => handleReject(selectedVenue.id)}
-                        className="bg-red-900/20 hover:bg-red-950 border border-red-500/30 hover:border-transparent text-red-400 font-bold py-2 rounded transition-all uppercase tracking-wider font-mono text-micro"
-                      >
-                        REJECT
-                      </button>
-                      <button
-                        onClick={() => handleApprove(selectedVenue.id)}
-                        className="bg-brand-neon hover:bg-brand-emerald text-background font-bold py-2 rounded transition-all uppercase tracking-wider font-mono text-micro"
-                      >
-                        APPROVE
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-12 text-zinc-600 font-mono text-xs">
-                  Pilih &quot;REVIEW&quot; pada pengajuan stadion di sebelah kiri untuk memeriksa kelengkapan berkas kepatuhan hukum.
-                </div>
-              )}
-            </div>
-          </div>
-
-        </div>
+        {/* Delegasi Interaksi ke Client Component */}
+        <VerificationClient initialVenues={pendingVenues || []} />
+        
       </div>
     </div>
   );
