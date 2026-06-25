@@ -1,248 +1,151 @@
-"use client";
-
 import React from "react";
-import {
-  Activity,
-  ScanBarcode,
-  BarChart4,
-  Grid,
-  TrendingUp,
-  ShieldAlert,
-  ActivitySquare
-} from "lucide-react";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import { BarChart3, TrendingUp, AlertOctagon } from "lucide-react";
 
-export default function AdminReportsPage() {
-  const stats = {
-    totalRevenue: 124500000,
-    operationalIncome: 102090000,
-    penaltyIncome: 22410000,
-    integrityMismatch: 0,
-    activeSubscribers: 184,
-  };
-
-  const revenueBreakdown = [
-    { day: "Senin", ops: 15200000, penalty: 2400000 },
-    { day: "Selasa", ops: 13500000, penalty: 1500000 },
-    { day: "Rabu", ops: 16800000, penalty: 3600000 },
-    { day: "Kamis", ops: 14100000, penalty: 4500000 },
-    { day: "Jumat", ops: 18500000, penalty: 1200000 },
-    { day: "Sabtu", ops: 24000000, penalty: 9200000 },
-  ];
-
-  const navigateTo = (path) => {
-    window.location.hash = path;
-    if (window.__sportixNavigate) {
-      window.__sportixNavigate(path);
+// Komponen Server murni: Tidak ada "use client", rendering diisolasi di server
+export default async function AdminVenueReportsPage() {
+  const cookieStore = cookies();
+  
+  // Inisialisasi Klien Server Supabase
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+      },
     }
-  };
+  );
+
+  // 1. Verifikasi Identitas Mutlak (Middleware sudah lewat, ini pengamanan lapis kedua)
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return <div className="p-8 text-red-500 font-mono">Fatal: Sesi tidak valid. Akses Ditolak.</div>;
+  }
+
+  // 2. Tarik ID Venue milik Admin ini (Mencegah intipan lintas-tenant)
+  const { data: venue, error: venueError } = await supabase
+    .from("venues")
+    .select("id, name")
+    .eq("owner_id", user.id)
+    .single();
+
+  if (venueError || !venue) {
+    return (
+      <div className="max-w-7xl mx-auto px-6 mt-8 border border-brand-amber/30 bg-brand-amber/10 p-6 rounded-xl">
+        <h3 className="text-brand-amber font-bold flex items-center gap-2">
+          <AlertOctagon className="w-5 h-5" /> Venue Tidak Ditemukan
+        </h3>
+        <p className="text-zinc-400 text-sm mt-2">
+          Akun Anda belum dikaitkan dengan entitas venue manapun, atau masih berstatus PENDING validasi Super Admin.
+        </p>
+      </div>
+    );
+  }
+
+  // 3. Tarik agregasi dari Analytics Reporting Agent (ARA) di tabel revenue_reports
+  const { data: reports, error: reportError } = await supabase
+    .from("revenue_reports")
+    .select("*")
+    .eq("venue_id", venue.id)
+    .order("report_date", { ascending: false })
+    .limit(30); // Ambil 30 hari terakhir
+
+  if (reportError) throw reportError; // Akan ditangkap oleh error.js terdekat jika gagal
+
+  // Kalkulasi total (Dijalankan secara efisien di server, bukan membebani RAM klien)
+  const totalRevenue = reports?.reduce((acc, curr) => acc + Number(curr.operational_revenue), 0) || 0;
+  const totalForfeit = reports?.reduce((acc, curr) => acc + Number(curr.forfeited_revenue), 0) || 0;
+  const totalNoShows = reports?.reduce((acc, curr) => acc + Number(curr.total_no_shows), 0) || 0;
 
   return (
-    <div className="bg-background text-foreground min-h-screen pb-16 font-sans select-none">
+    <div className="max-w-7xl mx-auto px-6 mt-8 font-sans">
+      <div className="mb-8">
+        <span className="text-xs font-mono text-zinc-500 tracking-wider uppercase block mb-1">
+          {venue.name} • DASHBOARD KEUANGAN
+        </span>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-white font-display flex items-center gap-3">
+          <BarChart3 className="w-8 h-8 text-brand-emerald" /> Laporan Pendapatan Otonom
+        </h1>
+        <p className="text-zinc-400 text-xs md:text-sm mt-1">
+          Sistem Analytics Reporting Agent (ARA) memperbarui pembukuan ini secara otomatis melalui asinkronisasi harian.
+        </p>
+      </div>
 
-      {/* Top dashboard navigation bar */}
-      <div className="border-b border-zinc-800 bg-surface-elevated sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-              <Activity className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-micro font-mono text-zinc-500 block leading-none">PARTNER SUITE</span>
-              <h2 className="text-base font-black text-foreground font-display">Academy Stadium Partner Suite</h2>
-            </div>
+      {/* Kartu Ringkasan (Terhindar dari Layout Shift karena ter-render statis di server) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-surface-elevated border border-zinc-800 p-6 rounded-2xl">
+          <span className="text-xs font-mono text-zinc-500 uppercase tracking-widest block mb-2">Total Operasional (30 Hari)</span>
+          <span className="text-3xl font-display font-bold text-white tracking-tight">
+            Rp {totalRevenue.toLocaleString("id-ID")}
+          </span>
+        </div>
+        
+        <div className="bg-surface-elevated border border-zinc-800 p-6 rounded-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10">
+            <TrendingUp className="w-16 h-16 text-brand-emerald" />
           </div>
+          <span className="text-xs font-mono text-brand-emerald uppercase tracking-widest block mb-2 font-bold">
+            Pendapatan Hangus (Forfeit)
+          </span>
+          <span className="text-3xl font-display font-bold text-brand-neon tracking-tight">
+            Rp {totalForfeit.toLocaleString("id-ID")}
+          </span>
+        </div>
 
-          <div className="flex bg-surface border border-zinc-800/80 p-1 rounded-lg">
-            <button
-              onClick={() => navigateTo("/admin-venue/slots")}
-              className="text-zinc-500 hover:text-zinc-300 px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
-            >
-              <Grid className="w-3.5 h-3.5" />
-              <span>SLOT MATRIX</span>
-            </button>
-            <button
-              onClick={() => navigateTo("/admin-venue/scan")}
-              className="text-zinc-500 hover:text-zinc-300 px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
-            >
-              <ScanBarcode className="w-3.5 h-3.5" />
-              <span>SCANNER GATE</span>
-            </button>
-            <button
-              onClick={() => navigateTo("/admin-venue/reports")}
-              className="bg-surface-hover text-foreground px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 border border-zinc-800"
-            >
-              <BarChart4 className="w-3.5 h-3.5 text-brand-neon" />
-              <span>REPORTS</span>
-            </button>
-          </div>
+        <div className="bg-surface-elevated border border-zinc-800 p-6 rounded-2xl">
+          <span className="text-xs font-mono text-zinc-500 uppercase tracking-widest block mb-2">Total No-Show Pelanggan</span>
+          <span className="text-3xl font-display font-bold text-brand-amber tracking-tight">
+            {totalNoShows} <span className="text-sm font-normal text-zinc-500 font-sans">Pelanggaran</span>
+          </span>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 mt-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-black text-foreground font-display">Analytical Revenue Reports</h1>
-          <p className="text-zinc-400 text-xs md:text-sm mt-1">
-            Segregasi dan laporan akuntansi keuangan digital Sportix secara real-time. Melacak rasio pendapatan operasional reguler dan denda penyitaan no-show secara transparan.
-          </p>
+      {/* Tabel Laporan Riwayat */}
+      <div className="bg-surface border border-zinc-800 rounded-2xl overflow-hidden">
+        <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-surface-elevated">
+          <h3 className="font-bold text-white font-display">Buku Besar Harian (Ledger Log)</h3>
+          <span className="text-xs bg-brand-emerald/10 text-brand-emerald px-3 py-1 rounded-full border border-brand-emerald/20 font-mono">
+            VERIFIED
+          </span>
         </div>
-
-        {/* 3 Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-
-          {/* Card 1: Total Revenue */}
-          <div className="bg-surface border border-zinc-800 rounded-xl p-6 relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-[3px] bg-brand-neon" />
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-micro font-mono text-zinc-500 uppercase tracking-widest block mb-1">
-                  TOTAL DIGITAL REVENUE
-                </span>
-                <h3 className="text-2xl md:text-3xl font-mono font-black text-foreground">
-                  Rp {stats.totalRevenue.toLocaleString("id-ID")}
-                </h3>
-              </div>
-              <div className="w-10 h-10 rounded bg-brand-neon/10 border border-brand-neon/20 flex items-center justify-center text-brand-neon">
-                <TrendingUp className="w-5 h-5" />
-              </div>
-            </div>
-            <p className="text-micro text-zinc-500 mt-4 uppercase font-mono tracking-wider">
-              🟢 SECURE CASHLESS • EXCLUDES MANUAL CASH
-            </p>
+        
+        {reports && reports.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-zinc-400">
+              <thead className="bg-zinc-900/50 font-mono text-xs uppercase border-b border-zinc-800">
+                <tr>
+                  <th className="px-6 py-4">Tanggal (WITA)</th>
+                  <th className="px-6 py-4">Sewa Terselesaikan</th>
+                  <th className="px-6 py-4">Pendapatan Sewa</th>
+                  <th className="px-6 py-4 text-brand-amber">Insiden No-Show</th>
+                  <th className="px-6 py-4 text-brand-emerald">Sita Dana (Forfeit)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50">
+                {reports.map((row) => (
+                  <tr key={row.id} className="hover:bg-surface-elevated transition-colors">
+                    <td className="px-6 py-4 font-mono text-white">{row.report_date}</td>
+                    <td className="px-6 py-4">{row.total_bookings} Transaksi</td>
+                    <td className="px-6 py-4 font-mono">Rp {Number(row.operational_revenue).toLocaleString("id-ID")}</td>
+                    <td className="px-6 py-4 text-brand-amber font-bold">{row.total_no_shows}</td>
+                    <td className="px-6 py-4 font-mono text-brand-neon font-bold">
+                      Rp {Number(row.forfeited_revenue).toLocaleString("id-ID")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-
-          {/* Card 2: Operational Income */}
-          <div className="bg-surface border border-zinc-800 rounded-xl p-6 relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-[3px] bg-blue-500" />
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-micro font-mono text-zinc-500 uppercase tracking-widest block mb-1">
-                  ARENA OPERATIONAL INCOME
-                </span>
-                <h3 className="text-2xl md:text-3xl font-mono font-black text-blue-400">
-                  Rp {stats.operationalIncome.toLocaleString("id-ID")}
-                </h3>
-              </div>
-              <div className="w-10 h-10 rounded bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-                <ActivitySquare className="w-5 h-5" />
-              </div>
+        ) : (
+          <div className="p-12 text-center">
+            <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-zinc-800">
+              <BarChart3 className="w-6 h-6 text-zinc-600" />
             </div>
-            <p className="text-micro text-zinc-500 mt-4 uppercase font-mono tracking-wider">
-              Regular slot court booking streams
-            </p>
+            <p className="text-zinc-500 text-sm">Belum ada agregasi laporan untuk venue ini.</p>
           </div>
-
-          {/* Card 3: Forfeit Penalty Income */}
-          <div className="bg-surface border border-zinc-800 rounded-xl p-6 relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-[3px] bg-brand-amber" />
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-micro font-mono text-zinc-500 uppercase tracking-widest block mb-1">
-                  FORFEIT NO-SHOW PENALTY
-                </span>
-                <h3 className="text-2xl md:text-3xl font-mono font-black text-brand-amber">
-                  Rp {stats.penaltyIncome.toLocaleString("id-ID")}
-                </h3>
-              </div>
-              <div className="w-10 h-10 rounded bg-brand-amber/10 border border-brand-amber/20 flex items-center justify-center text-brand-amber">
-                <ShieldAlert className="w-5 h-5" />
-              </div>
-            </div>
-            <p className="text-micro text-zinc-500 mt-4 uppercase font-mono tracking-wider">
-              Automatic 15-Min threshold forfeit seizure
-            </p>
-          </div>
-
-        </div>
-
-        {/* Breakdown Visualizer Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
-          {/* Main Visualizer Bar Chart (8 Columns) */}
-          <div className="lg:col-span-8 bg-surface border border-zinc-800 rounded-xl p-6">
-            <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-6">
-              Weekly Revenue Streams Segregation
-            </h3>
-
-            {/* Custom columns chart */}
-            <div className="space-y-6">
-              {revenueBreakdown.map((item, index) => {
-                const total = item.ops + item.penalty;
-                const opsPercent = (item.ops / 35000000) * 100;
-                const penaltyPercent = (item.penalty / 35000000) * 100;
-
-                return (
-                  <div key={index} className="space-y-1.5 font-mono">
-                    <div className="flex justify-between text-xs text-zinc-400">
-                      <span>{item.day}</span>
-                      <span>Total: Rp {total.toLocaleString("id-ID")}</span>
-                    </div>
-                    {/* Visual Progress Bar */}
-                    <div className="h-6 bg-surface-elevated border border-zinc-900 rounded-md overflow-hidden flex">
-                      <div
-                        style={{ width: `${opsPercent}%` }}
-                        className="bg-blue-500/80 hover:bg-blue-500 transition-all flex items-center pl-2 text-micro text-background font-bold"
-                        title="Operational"
-                      >
-                        {opsPercent > 15 && "Ops"}
-                      </div>
-                      <div
-                        style={{ width: `${penaltyPercent}%` }}
-                        className="bg-brand-amber/80 hover:bg-brand-amber transition-all flex items-center pl-2 text-micro text-background font-bold"
-                        title="Penalty"
-                      >
-                        {penaltyPercent > 10 && "Forfeit"}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Legend indicators */}
-            <div className="flex gap-4 mt-8 pt-4 border-t border-zinc-800/60 justify-center">
-              <div className="flex items-center gap-1.5 text-xs">
-                <span className="w-3 h-3 bg-blue-500 rounded" />
-                <span className="text-zinc-400">Regular Court Bookings</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs">
-                <span className="w-3 h-3 bg-brand-amber rounded" />
-                <span className="text-zinc-400">No-Show Forfeit Seizure</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Metric Details Panel (4 Columns) */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className="bg-surface border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-4">
-                INTEGRITY AUDIT LOGS
-              </h3>
-
-              <div className="space-y-4">
-                <div className="bg-surface-elevated border border-zinc-800/80 p-4 rounded-lg font-mono text-xs space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">MISMATCH COUNT</span>
-                    <span className="text-brand-neon font-bold">0 MISMATCH</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">LEDGER SYNC STATUS</span>
-                    <span className="text-foreground">SYNCHRONIZED (100%)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">CASHLESS GATE AUDIT</span>
-                    <span className="text-brand-neon">PASSED</span>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-blue-950/20 border border-blue-500/20 rounded text-tiny text-zinc-400 leading-normal">
-                  <strong className="text-blue-400 font-mono block mb-1 uppercase">RECON RECONCILIATION:</strong>
-                  Semua dana yang disita dari denda pembatalan no-show dialokasikan langsung pada metrik seizure penalty untuk menjamin kepatuhan audit.
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
+        )}
       </div>
     </div>
   );
