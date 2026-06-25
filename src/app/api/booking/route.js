@@ -47,10 +47,15 @@ export async function POST(req) {
     const bookingPrice = Number(price) || 150000;
 
     // 3. Atomic Locking (Pencegahan Mutlak Race Condition & Double Booking)
-    // Mengharuskan baris tersebut secara eksplisit berstatus 'AVAILABLE' sebelum bisa digeser ke 'LOCKED'.
+    // Kalkulasi waktu kadaluwarsa mutlak: Current Time UTC + 15 Menit
+    const lockExpiry = new Date(Date.now() + 15 * 60000).toISOString();
+
     const { data: updatedSlots, error: lockError } = await supabase
       .from("slots")
-      .update({ status: "LOCKED" })
+      .update({ 
+        status: "LOCKED",
+        locked_until: lockExpiry // BLIND SPOT PATCHED: Kunci batas waktu ini agar slot tidak mati
+      })
       .eq("id", slotId)
       .eq("status", "AVAILABLE")
       .select();
