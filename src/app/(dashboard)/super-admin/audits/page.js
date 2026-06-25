@@ -1,42 +1,60 @@
-"use client";
+import React from "react";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import Link from "next/link";
+import { Shield, TrendingUp, Sliders, RefreshCw, AlertTriangle } from "lucide-react";
 
-import React, { useState } from "react";
-import { 
-  Shield, 
-  TrendingUp, 
-  Sliders, 
-  RefreshCw
-} from "lucide-react";
+// Memaksa Next.js untuk tidak melakukan cache pada halaman finansial ini
+export const dynamic = 'force-dynamic';
 
-export default function SuperAdminAuditsPage() {
-  const [metrics, setMetrics] = useState({
-    integrityMismatch: 0,
-    expiredPaid: 12, // Forfeited due to 15-minute no-show
-    unprocessedRefunds: 4,
-    totalVolume: 124500000
-  });
+export default async function SuperAdminAuditsPage() {
+  const cookieStore = cookies();
+  
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    { cookies: { getAll() { return cookieStore.getAll(); } } }
+  );
 
-  const [ledger, setLedger] = useState([
-    { id: "TX-10029", invoice: "INV-8829", amount: 150000, type: "FORFEITED SEIZURE", gateway: "QRIS", date: "WE 24 Oct", status: "FORFEITED" },
-    { id: "TX-10028", invoice: "INV-8828", amount: 150000, type: "COURT BOOKING", gateway: "QRIS", date: "WE 24 Oct", status: "RECONCILIATED" },
-    { id: "TX-10025", invoice: "INV-8825", amount: 150000, type: "COURT BOOKING", gateway: "QRIS", date: "WE 24 Oct", status: "RECONCILIATED" },
-    { id: "TX-10020", invoice: "INV-8820", amount: 150000, type: "COURT BOOKING", gateway: "QRIS", date: "MO 22 Oct", status: "RECONCILIATED" },
-    { id: "TX-10018", invoice: "INV-8818", amount: 500000, type: "LEAGUE SIGNUP", gateway: "CREDIT CARD", date: "MO 22 Oct", status: "RECONCILIATED" },
-    { id: "TX-10015", invoice: "INV-8815", amount: 2450000, type: "UMKM GOODS", gateway: "QRIS", date: "SU 21 Oct", status: "RECONCILIATED" }
-  ]);
+  // 1. Verifikasi Mutlak Super Admin
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return <div className="p-8 text-red-500 font-mono text-center">Akses Ditolak.</div>;
+  
+  const { data: adminCheck } = await supabase.from("users").select("role").eq("id", user.id).single();
+  if (!adminCheck || adminCheck.role !== 'SUPER_ADMIN') {
+    return <div className="p-8 text-red-500 font-mono text-center">Forbidden. Khusus Super Admin.</div>;
+  }
 
-  const handleClearRefunds = () => {
-    if (metrics.unprocessedRefunds === 0) return;
-    alert("Memproses sisa pengembalian dana cashless yang disetujui...");
-    setMetrics({ ...metrics, unprocessedRefunds: 0 });
-  };
+  // 2. Agregasi Metrik Finansial Langsung dari Database Master
+  // A. Kalkulasi Total Volume (Semua transaksi CREDIT di Ledger)
+  const { data: volumeData, error: volumeErr } = await supabase
+    .from("ledger_transactions")
+    .select("amount")
+    .eq("transaction_type", "CREDIT");
+  
+  const totalVolume = volumeData?.reduce((sum, tx) => sum + Number(tx.amount), 0) || 0;
 
-  const navigateTo = (path) => {
-    window.location.hash = path;
-    if (window.__sportixNavigate) {
-      window.__sportixNavigate(path);
-    }
-  };
+  // B. Kalkulasi Forfeits (Status EXPIRED_PAID atau FORFEITED di reservasi)
+  const { count: forfeitedCount } = await supabase
+    .from("reservations")
+    .select("*", { count: 'exact', head: true })
+    .in("status", ["EXPIRED_PAID", "FORFEITED"]);
+
+  // C. Kalkulasi Unprocessed Refunds (Dana nyangkut yang butuh tindakan manual)
+  const { count: unprocessedRefundsCount } = await supabase
+    .from("refund_logs")
+    .select("*", { count: 'exact', head: true })
+    .eq("status", "PENDING_ACTION");
+
+  // D. Tarik Stream Ledger Real-Time (50 transaksi terakhir)
+  const { data: ledgerStream } = await supabase
+    .from("ledger_transactions")
+    .select("id, transaction_type, source, amount, created_at, user_id")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  // Asumsi dasar untuk Integrity Mismatch: Jika ada refund menggantung, sistem tidak sinkron 100%
+  const integrityMismatch = unprocessedRefundsCount > 0 ? unprocessedRefundsCount : 0;
 
   return (
     <div className="bg-background text-foreground min-h-screen pb-16 font-sans select-none">
@@ -50,34 +68,35 @@ export default function SuperAdminAuditsPage() {
             </div>
             <div>
               <span className="text-micro font-mono text-zinc-500 block leading-none">SUPER COMMAND SUITE</span>
-              <h2 className="text-base font-black text-foreground font-display">Super Admin Console</h2>
+              <h2 className="text-base font-black text-white font-display">Super Admin Console</h2>
             </div>
           </div>
 
           <div className="flex bg-surface border border-zinc-800/80 p-1 rounded-lg">
-            <button 
-              onClick={() => navigateTo("/super-admin/verifications")}
+            <Link 
+              href="/super-admin/verifications"
               className="text-zinc-500 hover:text-zinc-300 px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
             >
               <Sliders className="w-3.5 h-3.5" />
               <span>ONBOARDING QUEUE</span>
-            </button>
-            <button 
-              onClick={() => navigateTo("/super-admin/audits")}
-              className="bg-surface-hover text-foreground px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 border border-zinc-800"
+            </Link>
+            <Link 
+              href="/super-admin/audits"
+              className="bg-surface-hover text-white px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 border border-zinc-800"
             >
               <TrendingUp className="w-3.5 h-3.5 text-red-400" />
               <span>GLOBAL LEDGER</span>
-            </button>
+            </Link>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-6 mt-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-black text-foreground font-display">Global Financial Audit</h1>
+          <h1 className="text-2xl font-black text-white font-display">Global Financial Audit</h1>
           <p className="text-zinc-400 text-xs md:text-sm mt-1">
-            Buku besar digital dan pemantau integritas transaksi cashless Sportix. Seluruh aliran dana yang disita dari penalti keterlambatan 15-menit diaudit secara transparan di sini.
+            Data disinkronisasi secara real-time dari tabel <code className="bg-zinc-800 px-1 rounded">ledger_transactions</code>. 
+            Modul ini menolak cache untuk menjamin presisi akuntansi absolut.
           </p>
         </div>
 
@@ -86,22 +105,24 @@ export default function SuperAdminAuditsPage() {
           
           {/* Integrity Mismatch */}
           <div className="bg-surface border border-zinc-800 rounded-xl p-5 relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-brand-emerald" />
-            <span className="text-micro font-mono text-zinc-500 block uppercase mb-1">INTEGRITY MISMATCH</span>
-            <h3 className="text-2xl font-mono font-black text-brand-neon">
-              {metrics.integrityMismatch} MISMATCH
+            <div className={`absolute top-0 left-0 right-0 h-[2px] ${integrityMismatch > 0 ? 'bg-red-500 animate-pulse' : 'bg-brand-emerald'}`} />
+            <span className="text-micro font-mono text-zinc-500 block uppercase mb-1">INTEGRITY STATUS</span>
+            <h3 className={`text-2xl font-mono font-black ${integrityMismatch > 0 ? 'text-red-400' : 'text-brand-neon'}`}>
+              {integrityMismatch > 0 ? `${integrityMismatch} WARNINGS` : 'SECURE'}
             </h3>
-            <p className="text-micro text-zinc-600 mt-3 font-mono">ALL LEDGERS SYNCHRONIZED</p>
+            <p className="text-micro text-zinc-600 mt-3 font-mono">
+              {integrityMismatch > 0 ? 'ANOMALI REKONSILIASI TERDETEKSI' : 'ALL LEDGERS SYNCHRONIZED'}
+            </p>
           </div>
 
           {/* Expired Paid (Forfeits) */}
           <div className="bg-surface border border-zinc-800 rounded-xl p-5 relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-brand-amber" />
-            <span className="text-micro font-mono text-zinc-500 block uppercase mb-1">EXPIRED PAID (FORFEITS)</span>
+            <span className="text-micro font-mono text-zinc-500 block uppercase mb-1">FORFEITED SEIZURES</span>
             <h3 className="text-2xl font-mono font-black text-brand-amber">
-              {metrics.expiredPaid} SLOTS
+              {forfeitedCount || 0} TIKET HANGUS
             </h3>
-            <p className="text-micro text-zinc-500 mt-3 font-mono">15-Min threshold forfeit seizure</p>
+            <p className="text-micro text-zinc-500 mt-3 font-mono">Total eksekusi sanksi 15-Menit</p>
           </div>
 
           {/* Unprocessed Refunds */}
@@ -110,15 +131,12 @@ export default function SuperAdminAuditsPage() {
             <div>
               <span className="text-micro font-mono text-zinc-500 block uppercase mb-1">UNPROCESSED REFUNDS</span>
               <h3 className="text-2xl font-mono font-black text-red-400">
-                {metrics.unprocessedRefunds} REQUESTS
+                {unprocessedRefundsCount || 0} REQUESTS
               </h3>
             </div>
-            {metrics.unprocessedRefunds > 0 ? (
-              <button
-                onClick={handleClearRefunds}
-                className="mt-3 bg-red-950/30 hover:bg-red-900/80 border border-red-500/20 hover:border-transparent text-red-400 hover:text-foreground font-mono text-micro py-1 rounded transition-all"
-              >
-                RESOLVE REFUNDS
+            {unprocessedRefundsCount > 0 ? (
+              <button className="mt-3 bg-red-950/30 hover:bg-red-900 border border-red-500/20 text-red-400 font-mono text-micro py-1 rounded transition-all cursor-pointer">
+                REVIEW REFUNDS
               </button>
             ) : (
               <p className="text-micro text-zinc-600 mt-3 font-mono">CLEARED</p>
@@ -128,9 +146,9 @@ export default function SuperAdminAuditsPage() {
           {/* Global Cashless Volume */}
           <div className="bg-surface border border-zinc-800 rounded-xl p-5 relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-blue-500" />
-            <span className="text-micro font-mono text-zinc-500 block uppercase mb-1">GLOBAL CASHLESS VOLUME</span>
-            <h3 className="text-2xl font-mono font-black text-foreground">
-              Rp {metrics.totalVolume.toLocaleString("id-ID")}
+            <span className="text-micro font-mono text-zinc-500 block uppercase mb-1">GROSS CASHLESS VOLUME</span>
+            <h3 className="text-2xl font-mono font-black text-white">
+              Rp {totalVolume.toLocaleString("id-ID")}
             </h3>
             <p className="text-micro text-zinc-500 mt-3 font-mono">RECONCILIATION VERIFIED</p>
           </div>
@@ -140,47 +158,54 @@ export default function SuperAdminAuditsPage() {
         {/* Ledger Stream Table */}
         <div className="bg-surface border border-zinc-800 rounded-xl p-6">
           <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-6 flex items-center gap-1.5">
-            <RefreshCw className="w-4 h-4 text-red-400" /> LIVE TRANSACTIONAL AUDIT LEDGER
+            <RefreshCw className="w-4 h-4 text-red-400" /> IMMUTABLE LEDGER STREAM
           </h3>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs font-mono">
-              <thead>
-                <tr className="border-b border-zinc-800 text-zinc-500 uppercase pb-3">
-                  <th className="pb-3 font-semibold">TX ID</th>
-                  <th className="pb-3 font-semibold">INVOICE</th>
-                  <th className="pb-3 font-semibold">Kategori Aliran</th>
-                  <th className="pb-3 font-semibold">Metode</th>
-                  <th className="pb-3 font-semibold text-right">Nominal</th>
-                  <th className="pb-3 font-semibold text-right">Status Audit</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/60">
-                {ledger.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-surface-hover/40">
-                    <td className="py-4 font-bold text-foreground">{tx.id}</td>
-                    <td className="py-4 text-zinc-400">{tx.invoice}</td>
-                    <td className="py-4">
-                      <span className="bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded text-zinc-300">
-                        {tx.type}
-                      </span>
-                    </td>
-                    <td className="py-4 text-zinc-400">{tx.gateway}</td>
-                    <td className="py-4 text-right font-bold text-foreground">
-                      Rp {tx.amount.toLocaleString("id-ID")}
-                    </td>
-                    <td className="py-4 text-right">
-                      <span className={`text-micro font-bold px-2 py-0.5 rounded uppercase ${
-                        tx.status === "FORFEITED" ? "bg-brand-amber/15 text-brand-amber border border-brand-amber/20" : "bg-brand-emerald/15 text-brand-neon border border-brand-emerald/20"
-                      }`}>
-                        {tx.status}
-                      </span>
-                    </td>
+          {ledgerStream && ledgerStream.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs font-mono">
+                <thead>
+                  <tr className="border-b border-zinc-800 text-zinc-500 uppercase pb-3">
+                    <th className="pb-3 font-semibold">TX UUID</th>
+                    <th className="pb-3 font-semibold">Waktu (UTC)</th>
+                    <th className="pb-3 font-semibold">Sumber Transaksi</th>
+                    <th className="pb-3 font-semibold text-right">Nominal</th>
+                    <th className="pb-3 font-semibold text-right">Tipe Mutasi</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/60">
+                  {ledgerStream.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-surface-hover/40">
+                      <td className="py-4 font-bold text-zinc-300">
+                        {tx.id.substring(0, 8)}...
+                      </td>
+                      <td className="py-4 text-zinc-400">{new Date(tx.created_at).toLocaleString('id-ID')}</td>
+                      <td className="py-4">
+                        <span className="bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded text-zinc-300">
+                          {tx.source}
+                        </span>
+                      </td>
+                      <td className="py-4 text-right font-bold text-white">
+                        Rp {Number(tx.amount).toLocaleString("id-ID")}
+                      </td>
+                      <td className="py-4 text-right">
+                        <span className={`text-micro font-bold px-2 py-0.5 rounded uppercase ${
+                          tx.transaction_type === "DEBIT" ? "bg-red-500/15 text-red-400 border border-red-500/20" : "bg-brand-emerald/15 text-brand-neon border border-brand-emerald/20"
+                        }`}>
+                          {tx.transaction_type}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-12 border border-zinc-800 border-dashed rounded-lg">
+              <AlertTriangle className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
+              <p className="text-zinc-500 font-mono text-sm">Buku besar kosong. Belum ada rekonsiliasi yang terjadi.</p>
+            </div>
+          )}
         </div>
 
       </div>
