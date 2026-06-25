@@ -1,4 +1,4 @@
-import { getSupabase } from "@/lib/supabase";
+import { getSupabase } from "../../../lib/supabase";
 
 export async function POST(req) {
   const startTime = Date.now();
@@ -16,16 +16,16 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { barcodeToken } = body; // UUID E-Ticket dari QR Code
+    const { barcodeToken } = body;
 
     if (!barcodeToken) {
       return new Response(JSON.stringify({ success: false, message: "Barcode token hilang." }), { status: 400 });
     }
 
-    // 2. Tarik data reservasi berdasarkan Barcode Token
+    // 2. Tarik data reservasi secara rinci untuk kalkulasi waktu lokal
     const { data: reservation, error: resErr } = await supabase
       .from("reservations")
-      .select("id, status, field_id, fields(venue_id)")
+      .select("id, status, booking_date, start_time, field_id, user_id, fields(venue_id)")
       .eq("barcode_token", barcodeToken)
       .single();
 
@@ -33,7 +33,7 @@ export async function POST(req) {
       return new Response(JSON.stringify({ success: false, message: "Tiket tidak ditemukan atau barcode tidak valid." }), { status: 404 });
     }
 
-    // 3. Validasi Kepemilikan Venue (Cegah Admin Venue A nge-scan tiket Venue B)
+    // 3. Validasi Kepemilikan Venue Mutlak
     const venueId = reservation.fields?.venue_id;
     const { data: venueOwnership } = await supabase
       .from("venues")
@@ -46,8 +46,25 @@ export async function POST(req) {
       return new Response(JSON.stringify({ success: false, message: "Akses ditolak. Tiket ini bukan untuk Venue Anda." }), { status: 403 });
     }
 
-    // 4. Validasi Status Transaksi
-    if (reservation.status !== 'CONFIRMED') {
+    // 4. FAIL-SAFE GUARD: Penegakan Disiplin Waktu (Strict Forfeit Policy 15 Menit)
+    // Jika tiket masih CONFIRMED, pastikan admin tidak men-scan tiket yang sudah telat lewat 15 menit
+    if (reservation.status === 'CONFIRMED') {
+      const reservationDateTimeWITA = new Date(`${reservation.booking_date}T${reservation.start_time}+08:00`); // WITA = UTC+8
+      const currentDateTimeWITA = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Makassar"}));
+      
+      const diffInMinutes = (currentDateTimeWITA - reservationDateTimeWITA) / 60000;
+
+      if (diffInMinutes > 15) {
+        // Cronjob gagal/terlambat. Kita eksekusi FORFEIT secara manual di sini!
+        await supabase.from("reservations").update({ status: "FORFEITED" }).eq("id", reservation.id);
+        await supabase.from("slots").update({ status: "AVAILABLE" }).eq("id", reservation.field_id);
+        
+        return new Response(JSON.stringify({ 
+          success: false, 
+          message: "Akses Ditolak. Keterlambatan melebihi 15 menit. Dana disita 100% dan tiket dihanguskan oleh sistem." 
+        }), { status: 403 });
+      }
+    } else {
       return new Response(JSON.stringify({ 
         success: false, 
         message: `Tiket tidak dapat di-scan. Status saat ini: ${reservation.status}` 
@@ -55,10 +72,12 @@ export async function POST(req) {
     }
 
     // 5. Eksekusi Check-In & Penutupan Transaksi (Sesuai Flowchart Bab 2.5)
-    await supabase.from("reservations").update({ 
-      status: "COMPLETED", 
-      verified_by: user.id 
-    }).eq("id", reservation.id);
+    const { error: updateErr } = await supabase
+      .from("reservations")
+      .update({ status: "COMPLETED", verified_by: user.id })
+      .eq("id", reservation.id);
+
+    if (updateErr) throw updateErr;
 
     return new Response(JSON.stringify({
       success: true,
