@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true, // WAJIB untuk mendeteksi anomali React di tahap development
+  reactStrictMode: true,
   images: {
     remotePatterns: [
       {
@@ -10,12 +10,11 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'your-supabase-project-id.supabase.co', // Siapkan untuk gambar asli di masa depan
+        hostname: 'niuhnidrobsavowehzwx.supabase.co', // Ganti dengan ID Supabase Anda jika ada gambar dari Supabase Storage nanti
         pathname: '/storage/v1/object/public/**',
       }
     ],
   },
-  // Mengabaikan error ESLint sementara saat build jika Anda belum merapikan rules-nya
   eslint: {
     ignoreDuringBuilds: true,
   },
