@@ -41,7 +41,7 @@ export async function POST(req) {
       return new Response(JSON.stringify({ reconciled: false, message: "Format Order ID tidak valid (Prefix hilang)." }), { status: 400 });
     }
 
-    const prefix = order_id.substring(0, firstDashIndex); // "REV" atau "TRN"
+    const prefix = order_id.substring(0, firstDashIndex); // "REV", "TRN", atau "UMKM"
     const actualUuid = order_id.substring(firstDashIndex + 1); // "123e4567-e89b-..."
 
     const supabase = getSupabase();
@@ -50,7 +50,7 @@ export async function POST(req) {
     const isSettled = ["settlement", "capture"].includes(transaction_status.toLowerCase());
     const isExpiredOrFailed = ["expire", "cancel", "deny"].includes(transaction_status.toLowerCase());
 
-    // 3. Routing Berdasarkan Ekosistem (Reservasi vs Turnamen)
+    // 3. Routing Berdasarkan Ekosistem (Reservasi, Turnamen, UMKM)
     if (isSettled) {
       
       // --- A. EKOSISTEM RESERVASI LAPANGAN (REV) ---
@@ -132,8 +132,39 @@ export async function POST(req) {
         }
       }
 
+      // --- C. EKOSISTEM LOKAPASAR KONSINYASI UMKM (UMKM) ---
+      else if (prefix === "UMKM") {
+        const { data: order } = await supabase
+          .from("umkm_orders")
+          .select("id, status, user_id, total_price, store_id")
+          .eq("id", actualUuid)
+          .single();
+
+        if (order && order.status === "PENDING_PAYMENT") {
+          // 1. Naikkan status menjadi PREPARING
+          await supabase
+            .from("umkm_orders")
+            .update({ status: "PREPARING" })
+            .eq("id", actualUuid);
+
+          // 2. Alirkan dana bersih ke Buku Besar (Ledger CREDIT) milik Toko UMKM Merchant
+          const { data: storeInfo } = await supabase.from("umkm_stores").select("owner_id").eq("id", order.store_id).single();
+          
+          if (storeInfo) {
+            await supabase.from("ledger_transactions").insert({
+              user_id: storeInfo.owner_id,
+              transaction_type: "CREDIT",
+              source: "UMKM_PRODUCT_SALE",
+              amount: order.total_price,
+              umkm_order_id: order.id
+            });
+          }
+        }
+      }
+
     } else if (isExpiredOrFailed) {
-      // 4. Logika Pembersihan SLA (Pembebasan Slot)
+      // 4. Logika Pembersihan & Rollback (Kegagalan Pembayaran)
+      
       if (prefix === "REV") {
         const { data: reservation } = await supabase.from("reservations").select("status, field_id").eq("id", actualUuid).single();
         if (reservation && reservation.status === 'PENDING') {
@@ -142,10 +173,33 @@ export async function POST(req) {
             await supabase.from("slots").update({ status: "AVAILABLE", locked_until: null }).eq("id", reservation.field_id);
           }
         }
-      } else if (prefix === "TRN") {
+      } 
+      
+      else if (prefix === "TRN") {
          const { data: registration } = await supabase.from("tournament_registrations").select("status").eq("id", actualUuid).single();
          if (registration && registration.payment_status === 'PENDING') {
            await supabase.from("tournament_registrations").update({ status: "CANCELLED" }).eq("id", actualUuid);
+         }
+      } 
+      
+      else if (prefix === "UMKM") {
+         const { data: order } = await supabase
+           .from("umkm_orders")
+           .select("status, product_id, quantity")
+           .eq("id", actualUuid)
+           .single();
+           
+         if (order && order.status === "PENDING_PAYMENT") {
+           // 1. Batalkan Pesanan
+           await supabase.from("umkm_orders").update({ status: "CANCELLED" }).eq("id", actualUuid);
+           
+           // 2. Kembalikan (Rollback) Stok Barang Fisik ke Toko
+           if (order.product_id && order.quantity) {
+             const { data: currentProd } = await supabase.from("umkm_products").select("stock").eq("id", order.product_id).single();
+             if (currentProd) {
+               await supabase.from("umkm_products").update({ stock: currentProd.stock + order.quantity }).eq("id", order.product_id);
+             }
+           }
          }
       }
     }
