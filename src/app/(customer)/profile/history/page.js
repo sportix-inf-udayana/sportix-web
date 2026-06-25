@@ -104,7 +104,7 @@ export default async function ProfileHistoryPage() {
       {/* Tabs Row */}
       <div className="max-w-7xl mx-auto px-6 mt-8">
         <div className="flex border-b border-zinc-800/80 gap-6 mb-8">
-          <div className="pb-4 text-sm font-semibold relative text-brand-neon font-bold flex items-center">
+          <div className="pb-4 text-sm relative text-brand-neon font-bold flex items-center">
             My Tickets
             <span className="ml-1.5 bg-brand-emerald/15 text-brand-neon text-micro px-1.5 py-0.5 rounded-full font-mono">
               {activeTickets.length} Active
