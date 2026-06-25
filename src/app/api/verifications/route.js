@@ -1,27 +1,29 @@
-import { getSupabase } from "@/lib/supabase";
+import { NextResponse } from "next/server";
+import { getSupabase } from "../../../lib/supabase";
 
 export async function POST(req) {
   const startTime = Date.now();
   try {
     const supabase = getSupabase();
-    if (!supabase) return new Response("Service Unavailable", { status: 503 });
+    if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
 
     // 1. Otorisasi Mutlak: Harus Super Admin
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return new Response("Unauthorized", { status: 401 });
+    const authHeader = req.headers.get('Authorization');
+    const token = authHeader ? authHeader.replace('Bearer ', '') : null;
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) return new NextResponse("Unauthorized", { status: 401 });
 
     const { data: adminUser } = await supabase.from("users").select("role").eq("id", user.id).single();
     if (!adminUser || adminUser.role !== 'SUPER_ADMIN') {
-      return new Response(JSON.stringify({ success: false, message: "Forbidden. Membutuhkan akses Super Admin." }), { status: 403 });
+      return NextResponse.json({ success: false, message: "Forbidden. Membutuhkan akses Super Admin." }, { status: 403 });
     }
 
     const body = await req.json();
-    // entityType = 'VENUE' | 'COACH' | 'UMKM_STORE'
-    // action = 'APPROVE' | 'REJECT'
     const { entityId, entityType, action } = body; 
 
     if (!entityId || !entityType || !action) {
-      return new Response(JSON.stringify({ success: false, message: "Parameter validasi tidak lengkap." }), { status: 400 });
+      return NextResponse.json({ success: false, message: "Parameter validasi tidak lengkap." }, { status: 400 });
     }
 
     const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
@@ -31,10 +33,10 @@ export async function POST(req) {
       case 'VENUE': targetTable = 'venues'; break;
       case 'COACH': targetTable = 'coaches'; break;
       case 'UMKM_STORE': targetTable = 'umkm_stores'; break;
-      default: return new Response(JSON.stringify({ success: false, message: "Tipe entitas tidak valid." }), { status: 400 });
+      default: return NextResponse.json({ success: false, message: "Tipe entitas tidak valid." }, { status: 400 });
     }
 
-    // 2. Eksekusi Pembaruan Status
+    // 2. Eksekusi Pembaruan Status ke Database Nyata
     const { data, error: updateErr } = await supabase
       .from(targetTable)
       .update({ status: newStatus })
@@ -43,16 +45,18 @@ export async function POST(req) {
       .single();
 
     if (updateErr || !data) {
-      return new Response(JSON.stringify({ success: false, message: `Gagal memperbarui status pada tabel ${targetTable}.` }), { status: 500 });
+      console.error("Verification Update Error:", updateErr);
+      return NextResponse.json({ success: false, message: `Gagal memperbarui status pada tabel ${targetTable}.` }, { status: 500 });
     }
 
-    return new Response(JSON.stringify({
+    return NextResponse.json({
       success: true,
       message: `${entityType} berhasil di-${newStatus}.`,
       executionMs: Date.now() - startTime
-    }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
 
   } catch (error) {
-    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500 });
+    console.error("Verification API Panic:", error);
+    return NextResponse.json({ success: false, error: "Kesalahan internal server." }, { status: 500 });
   }
 }

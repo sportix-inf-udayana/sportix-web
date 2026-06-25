@@ -1,78 +1,83 @@
-import { getSupabase } from "@/lib/supabase";
+import { NextResponse } from "next/server";
+import { getSupabase } from "../../../lib/supabase";
 
-export async function GET(req) {
-  const startTime = Date.now();
+// Memastikan Next.js tidak melakukan caching pada endpoint ini
+export const dynamic = 'force-dynamic';
+
+export async function GET(request) {
+  // 1. Proteksi Otorisasi Infrastruktur
+  // Endpoint ini tidak boleh bisa di-hit oleh publik secara serampangan
+  const authHeader = request.headers.get('authorization');
+  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new NextResponse(JSON.stringify({ error: "Akses Ditolak. Otorisasi Cron gagal." }), { 
+      status: 401,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    return new NextResponse(JSON.stringify({ error: "Fatal: Database tidak merespons." }), { 
+      status: 503,
+      headers: { "Content-Type": "application/json" } 
+    });
+  }
+
   try {
-    const supabase = getSupabase();
-    if (!supabase) return new Response("DB Offline", { status: 503 });
+    const nowISO = new Date().toISOString();
 
-    // 1. Dapatkan tanggal hari ini di zona WITA
-    let reportDate = new Date().toISOString().split('T')[0]; // Fallback
-    try {
-      const { data, error } = await supabase.rpc("get_local_wita_time");
-      if (!error && data) {
-        reportDate = data.split('T')[0]; // Ambil YYYY-MM-DD
+    // ============================================================================
+    // AGEN 1: SLOT LOCKING SWEEPER (SLA)
+    // Merilis slot yang di-booking tapi tidak dibayar setelah batas waktu 15 menit
+    // ============================================================================
+    const { data: expiredLocks, error: sweepError } = await supabase
+      .from('slots')
+      .update({ status: 'AVAILABLE', locked_until: null, reservation_id: null })
+      .eq('status', 'LOCKED')
+      .lt('locked_until', nowISO)
+      .select('id, reservation_id');
+
+    if (sweepError) throw sweepError;
+
+    // Batalkan juga status reservasi terkait menjadi EXPIRED jika payment telat
+    if (expiredLocks && expiredLocks.length > 0) {
+      const reservationIds = expiredLocks.map(slot => slot.reservation_id).filter(Boolean);
+      if (reservationIds.length > 0) {
+        await supabase
+          .from('reservations')
+          .update({ status: 'EXPIRED' })
+          .in('id', reservationIds)
+          .eq('status', 'PENDING');
       }
-    } catch (rpcErr) {}
+    }
 
-    // 2. Tarik semua transaksi ledger hari ini untuk pengelompokan (Hanya CREDIT dan FORFEIT)
-    // Asumsi: Semua revenue masuk via ledger_transactions untuk menjaga single source of truth
-    const { data: todayTransactions, error: fetchErr } = await supabase
-      .from("ledger_transactions")
-      .select("amount, source, reservation_id, reservations(field_id, status)")
-      .gte("created_at", `${reportDate}T00:00:00+08:00`)
-      .lt("created_at", `${reportDate}T23:59:59+08:00`);
+    // ============================================================================
+    // AGEN 2: FORFEIT ENFORCEMENT AGENT (FEA) - STRICT 15 MIN POLICY
+    // Eksekusi sanksi pembatalan otomatis dan sita dana 100% jika telat check-in
+    // ============================================================================
+    // Catatan: Ini memanggil fungsi RPC yang sudah Anda definisikan di Supabase
+    // untuk melakukan kalkulasi zona waktu WITA dengan presisi di level fisik database.
+    const { data: forfeitedData, error: forfeitError } = await supabase
+      .rpc('enforce_strict_forfeits', { current_utc_time: nowISO });
 
-    if (fetchErr) throw fetchErr;
+    if (forfeitError) {
+      console.error("FEA Execution Failed:", forfeitError);
+      // Kami tidak melakukan throw di sini agar proses pelaporan di bawah tetap berjalan
+    }
 
-    // 3. Agregasi data per venue (melalui field_id di relasi reservations)
-    // Catatan: Anda perlu JOIN ke fields lalu ke venues jika arsitekturnya kompleks, 
-    // ini adalah agregasi dasar berdasarkan data ledger.
-    let venueStats = {};
-
-    (todayTransactions || []).forEach(trx => {
-      // Lewati jika bukan transaksi terkait lapangan (misal UMKM/Turnamen)
-      if (trx.source !== 'COURT_BOOKING' && trx.source !== 'FORFEIT_REVENUE') return;
-      
-      const venueId = trx.reservations?.fields?.venue_id || "DEFAULT_VENUE_ID"; // Sesuaikan JOIN fisik Anda
-      
-      if (!venueStats[venueId]) {
-        venueStats[venueId] = { opRev: 0, forfeitRev: 0, bookings: 0, noShows: 0 };
-      }
-
-      if (trx.source === 'COURT_BOOKING') {
-        venueStats[venueId].opRev += Number(trx.amount);
-        venueStats[venueId].bookings += 1;
-      } else if (trx.source === 'FORFEIT_REVENUE') {
-        venueStats[venueId].forfeitRev += Number(trx.amount);
-        venueStats[venueId].noShows += 1;
-      }
-    });
-
-    // 4. Eksekusi Upsert ke revenue_reports
-    const upsertPromises = Object.keys(venueStats).map(vId => {
-      return supabase.from("revenue_reports").upsert({
-        venue_id: vId,
-        report_date: reportDate,
-        operational_revenue: venueStats[vId].opRev,
-        forfeited_revenue: venueStats[vId].forfeitRev,
-        total_bookings: venueStats[vId].bookings,
-        total_no_shows: venueStats[vId].noShows,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'venue_id, report_date' });
-    });
-
-    await Promise.all(upsertPromises);
-
-    return new Response(JSON.stringify({
+    return new NextResponse(JSON.stringify({
       success: true,
-      agent: "ARA (Analytics Reporting Agent)",
-      dateProcessed: reportDate,
-      venuesAggregated: Object.keys(venueStats).length,
-      executionMs: Date.now() - startTime
+      message: "Autonomous Agents (SLA & FEA) executed successfully.",
+      sweptSlotsCount: expiredLocks?.length || 0,
+      timestamp: nowISO
     }), { status: 200, headers: { "Content-Type": "application/json" } });
 
   } catch (error) {
-    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500 });
+    console.error("CRON JOB PANIC:", error);
+    return new NextResponse(JSON.stringify({ 
+      success: false, 
+      message: "Kegagalan sistem otonom backend.", 
+      error: error.message 
+    }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 }

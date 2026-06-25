@@ -1,54 +1,42 @@
-"use client";
+import React from "react";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import Link from "next/link";
+import { Briefcase, Truck, Layers, MapPin, PackageOpen } from "lucide-react";
+import ShipmentDispatcherClient from "../../../../components/umkm/ShipmentDispatcherClient";
 
-import React, { useState } from "react";
-import { 
-  Briefcase, 
-  Truck, 
-  Layers, 
-  MapPin, 
-  Send,
-  Loader2
-} from "lucide-react";
+export const dynamic = 'force-dynamic';
 
-export default function SellerOrdersPage() {
-  const [orders, setOrders] = useState([
-    { id: "ORD-1042", product: "Velocity Strike Cleats", destination: "Jalan Legian No. 12, Kuta", courier: "Local Courier Wayan", status: "SHIPPED", date: "WE 24 Oct" },
-    { id: "ORD-1043", product: "Match Pro Ball", destination: "Jalan Petitenget No. 8, Seminyak", courier: "Local Courier Made", status: "PENDING", date: "WE 24 Oct" },
-    { id: "ORD-1044", product: "GripTech Gloves", destination: "Jalan Monkey Forest, Ubud", courier: "Unassigned", status: "PENDING", date: "TH 25 Oct" }
-  ]);
+export default async function SellerOrdersPage() {
+  const cookieStore = cookies();
+  
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    { cookies: { getAll() { return cookieStore.getAll(); } } }
+  );
 
-  const [selectedOrderId, setSelectedOrderId] = useState("ORD-1043");
-  const [courierName, setCourierName] = useState("");
-  const [shippingStatus, setShippingStatus] = useState("SHIPPED");
-  const [updating, setUpdating] = useState(false);
+  // 1. Verifikasi User & Toko
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return <div className="p-8 text-red-500 font-mono">Akses Ditolak.</div>;
 
-  const handleUpdateCourier = (e) => {
-    e.preventDefault();
-    if (!courierName) {
-      alert("Harap masukkan nama kurir lokal!");
-      return;
-    }
+  const { data: store } = await supabase
+    .from("umkm_stores")
+    .select("id")
+    .eq("owner_id", user.id)
+    .single();
 
-    setUpdating(true);
-    setTimeout(() => {
-      setOrders(orders.map(o => {
-        if (o.id === selectedOrderId) {
-          return { ...o, courier: courierName, status: shippingStatus };
-        }
-        return o;
-      }));
-      setUpdating(false);
-      setCourierName("");
-      alert(`Status pengiriman ${selectedOrderId} berhasil diperbarui!`);
-    }, 1200);
-  };
+  if (!store) return <div className="p-8 text-red-500 font-mono">Toko UMKM tidak ditemukan.</div>;
 
-  const navigateTo = (path) => {
-    window.location.hash = path;
-    if (window.__sportixNavigate) {
-      window.__sportixNavigate(path);
-    }
-  };
+  // 2. Tarik Pesanan Riil dari Database (Termasuk relasi ke produk)
+  const { data: orders } = await supabase
+    .from("umkm_orders")
+    .select(`
+      id, status, courier_name, delivery_address, created_at,
+      umkm_products (name)
+    `)
+    .eq("store_id", store.id)
+    .order("created_at", { ascending: false });
 
   return (
     <div className="bg-background text-foreground min-h-screen pb-16 font-sans select-none">
@@ -67,20 +55,20 @@ export default function SellerOrdersPage() {
           </div>
 
           <div className="flex bg-surface border border-zinc-800/80 p-1 rounded-lg">
-            <button 
-              onClick={() => navigateTo("/seller-umkm/products")}
+            <Link 
+              href="/seller-umkm/products"
               className="text-zinc-500 hover:text-zinc-300 px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
             >
               <Layers className="w-3.5 h-3.5" />
               <span>INVENTORY MGR</span>
-            </button>
-            <button 
-              onClick={() => navigateTo("/seller-umkm/orders")}
+            </Link>
+            <Link 
+              href="/seller-umkm/orders"
               className="bg-surface-hover text-white px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 border border-zinc-800"
             >
               <Truck className="w-3.5 h-3.5 text-purple-400" />
               <span>SHIPMENT ORDERS</span>
-            </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -89,133 +77,66 @@ export default function SellerOrdersPage() {
         <div className="mb-8">
           <h1 className="text-2xl font-black text-white font-display">Consignment Shipment Tracker</h1>
           <p className="text-zinc-400 text-xs md:text-sm mt-1">
-            Pantau rute dan status pengiriman barang olahraga konsinyasi di wilayah Bali. Tugaskan kurir lokal terpercaya untuk menjamin pengantaran tepat waktu.
+            Data pesanan disinkronisasi langsung dari server produksi. Tugaskan kurir lokal terpercaya untuk menjamin pengantaran tepat waktu ke pelanggan.
           </p>
         </div>
 
-        {/* Dual Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* Shipment Table (8 Columns) */}
+          {/* Shipment Table (8 Columns) - SSR Rendered */}
           <div className="lg:col-span-8 bg-surface border border-zinc-800 rounded-xl p-6">
             <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-6 flex items-center gap-1.5">
-              <Truck className="w-4 h-4 text-purple-400" /> ACTIVE SHIPMENTS TRAIL
+              <Truck className="w-4 h-4 text-purple-400" /> ACTIVE SHIPMENTS TRAIL (LIVE)
             </h3>
 
-            <div className="space-y-4">
-              {orders.map((order) => (
-                <div 
-                  key={order.id}
-                  className="bg-surface-elevated border border-zinc-800/80 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-zinc-700 transition-all"
-                >
-                  <div>
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-xs font-bold text-brand-neon">
-                        {order.id}
-                      </span>
-                      <span className="text-micro font-mono text-zinc-500">{order.date}</span>
-                      <span className={`text-micro font-mono font-bold px-2 py-0.5 rounded uppercase ${
-                        order.status === "PENDING" ? "bg-brand-amber/15 text-brand-amber border border-brand-amber/20" : "bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/20"
-                      }`}>
-                        {order.status}
-                      </span>
+            {orders && orders.length > 0 ? (
+              <div className="space-y-4">
+                {orders.map((order) => (
+                  <div 
+                    key={order.id}
+                    className="bg-surface-elevated border border-zinc-800/80 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-zinc-700 transition-all"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-mono text-xs font-bold text-brand-neon">
+                          {order.id.substring(0,8).toUpperCase()}...
+                        </span>
+                        <span className="text-micro font-mono text-zinc-500">
+                          {new Date(order.created_at).toLocaleDateString()}
+                        </span>
+                        <span className={`text-micro font-mono font-bold px-2 py-0.5 rounded uppercase ${
+                          order.status === "PENDING" ? "bg-brand-amber/15 text-brand-amber border border-brand-amber/20" : "bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/20"
+                        }`}>
+                          {order.status}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-bold text-white mt-2">
+                        {order.umkm_products?.name || "Produk Tidak Ditemukan"}
+                      </h4>
+                      <div className="flex items-center gap-1 text-xs text-zinc-400 mt-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-zinc-500" />
+                        <span>{order.delivery_address}</span>
+                      </div>
                     </div>
-                    <h4 className="text-sm font-bold text-white mt-2">
-                      {order.product}
-                    </h4>
-                    <div className="flex items-center gap-1 text-xs text-zinc-400 mt-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-zinc-500" />
-                      <span>{order.destination}</span>
-                    </div>
-                  </div>
 
-                  <div className="text-right flex flex-col items-end border-t md:border-t-0 border-zinc-800 pt-3 md:pt-0 w-full md:w-auto">
-                    <span className="text-micro font-mono text-zinc-500 block uppercase">LOCAL COURIER</span>
-                    <span className="text-xs font-bold text-white mt-1">{order.courier}</span>
-                    <button 
-                      onClick={() => {
-                        setSelectedOrderId(order.id);
-                        setCourierName(order.courier === "Unassigned" ? "" : order.courier);
-                        setShippingStatus(order.status);
-                      }}
-                      className="text-micro font-mono text-purple-400 hover:underline mt-2 cursor-pointer"
-                    >
-                      MANAGE SHIPMENT
-                    </button>
+                    <div className="text-right flex flex-col items-end border-t md:border-t-0 border-zinc-800 pt-3 md:pt-0 w-full md:w-auto">
+                      <span className="text-micro font-mono text-zinc-500 block uppercase">LOCAL COURIER</span>
+                      <span className="text-xs font-bold text-white mt-1">{order.courier_name || "Unassigned"}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 border border-zinc-800 border-dashed rounded-lg">
+                <PackageOpen className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
+                <p className="text-zinc-500 font-mono text-sm">Belum ada pesanan yang masuk ke toko Anda.</p>
+              </div>
+            )}
           </div>
 
-          {/* Local Courier Dispatch form (4 Columns) */}
+          {/* Local Courier Dispatch form (4 Columns) - Diserahkan ke Client Component */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="bg-surface border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-4">
-                LOCAL COURIER DISPATCHER
-              </h3>
-
-              <form onSubmit={handleUpdateCourier} className="space-y-4 text-xs font-mono">
-                <div>
-                  <label className="text-zinc-500 block mb-1 uppercase text-micro">
-                    SELECT ORDER ID
-                  </label>
-                  <select
-                    value={selectedOrderId}
-                    onChange={(e) => setSelectedOrderId(e.target.value)}
-                    className="w-full bg-surface-elevated border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-foreground outline-none"
-                  >
-                    {orders.map(o => (
-                      <option key={o.id} value={o.id}>{o.id} - {o.product}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-zinc-500 block mb-1 uppercase text-micro">
-                    COURIER NAME
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g., Local Courier Wayan"
-                    value={courierName}
-                    onChange={(e) => setCourierName(e.target.value)}
-                    className="w-full bg-surface-elevated border border-zinc-800 focus:border-purple-500 rounded-lg py-2.5 px-3 text-foreground outline-none placeholder-zinc-700 font-sans"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-zinc-500 block mb-1 uppercase text-micro">
-                    DELIVERY STATUS
-                  </label>
-                  <select
-                    value={shippingStatus}
-                    onChange={(e) => setShippingStatus(e.target.value)}
-                    className="w-full bg-surface-elevated border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-foreground outline-none"
-                  >
-                    <option value="PENDING">PENDING (Prepared)</option>
-                    <option value="SHIPPED">SHIPPED (En Route)</option>
-                    <option value="DELIVERED">DELIVERED (Completed)</option>
-                  </select>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 uppercase tracking-wider transition-all"
-                >
-                  {updating ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <span>Update Courier Trail</span>
-                      <Send className="w-3.5 h-3.5" />
-                    </>
-                  )}
-                </button>
-              </form>
-            </div>
+            <ShipmentDispatcherClient initialOrders={orders || []} />
           </div>
 
         </div>

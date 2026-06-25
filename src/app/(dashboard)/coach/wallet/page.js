@@ -1,207 +1,119 @@
-"use client";
+import React from "react";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import { Wallet, History, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import WithdrawalClientWrapper from "../../../../components/coach/WithdrawalClientWrapper";
 
-import React, { useState } from "react";
-import { 
-  ArrowLeft, 
-  DollarSign, 
-  CreditCard, 
-  Send, 
-  CheckCircle2
-} from "lucide-react";
+export default async function CoachWalletPage() {
+  const cookieStore = cookies();
+  
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    { cookies: { getAll() { return cookieStore.getAll(); } } }
+  );
 
-export default function CoachWalletPage() {
-  const [balance, setBalance] = useState(4500000);
-  const [bankName, setBankName] = useState("BCA");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState("");
-  const [error, setError] = useState("");
+  // 1. Verifikasi Otorisasi Pelatih
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return <div className="p-8 text-red-500 font-mono">Akses Ditolak.</div>;
 
-  const handleWithdraw = (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
+  // 2. Tarik Saldo Dompet Fisik
+  const { data: balanceData } = await supabase
+    .from("balances")
+    .select("available_balance, pending_balance")
+    .eq("user_id", user.id)
+    .single();
 
-    const amount = parseFloat(withdrawAmount);
-    if (!accountNumber) {
-      setError("Nomor rekening bank tujuan wajib diisi!");
-      return;
-    }
-    if (isNaN(amount) || amount <= 0) {
-      setError("Harap masukkan jumlah pencairan yang valid!");
-      return;
-    }
-    if (amount > balance) {
-      setError("Saldo Anda tidak mencukupi untuk nominal pencairan ini!");
-      return;
-    }
+  const availableBalance = balanceData?.available_balance || 0;
+  const pendingBalance = balanceData?.pending_balance || 0;
 
-    setLoading(true);
-
-    setTimeout(() => {
-      setLoading(false);
-      setBalance(balance - amount);
-      setSuccess(`Pencairan dana Rp ${amount.toLocaleString("id-ID")} berhasil diproses! Sedang dikirim ke rekening ${bankName} - ${accountNumber}.`);
-      setWithdrawAmount("");
-      setAccountNumber("");
-    }, 1500);
-  };
-
-  const navigateBack = () => {
-    window.location.hash = "/coach/schedule";
-    if (window.__sportixNavigate) {
-      window.__sportixNavigate("/coach/schedule");
-    }
-  };
+  // 3. Tarik Riwayat Buku Besar (Ledger Transactions) - Single Source of Truth
+  const { data: ledgerHistory } = await supabase
+    .from("ledger_transactions")
+    .select("id, transaction_type, source, amount, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(20);
 
   return (
-    <div className="bg-background text-foreground min-h-screen pb-16 font-sans select-none">
-      
-      {/* Header Container */}
-      <div className="border-b border-zinc-800 bg-surface-elevated py-6 px-6">
-        <div className="max-w-xl mx-auto flex items-center justify-between">
-          <button 
-            onClick={navigateBack}
-            className="flex items-center gap-2 text-zinc-400 hover:text-white transition-all text-xs font-mono uppercase"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>KEMBALI KE MATRIX</span>
-          </button>
-          <span className="text-micro font-mono text-zinc-500 uppercase">PORTAL WALLET</span>
+    <div className="max-w-7xl mx-auto px-6 mt-8 font-sans">
+      <div className="mb-8">
+        <span className="text-xs font-mono text-zinc-500 tracking-wider uppercase block mb-1">
+          COACH REVENUE SYSTEM
+        </span>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-white font-display flex items-center gap-3">
+          <Wallet className="w-8 h-8 text-brand-neon" /> Dompet Digital
+        </h1>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        {/* Kartu Saldo Utama (SSR Rendered) */}
+        <div className="lg:col-span-2 bg-gradient-to-br from-zinc-900 to-surface-elevated border border-zinc-800 rounded-2xl p-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-brand-neon/5 rounded-full blur-[80px] pointer-events-none" />
+          <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div>
+              <span className="text-xs font-mono text-zinc-400 uppercase tracking-widest block mb-2">SALDO TERSEDIA</span>
+              <div className="text-4xl md:text-5xl font-black text-white font-display tracking-tight">
+                Rp {availableBalance.toLocaleString("id-ID")}
+              </div>
+              <div className="mt-3 text-xs font-mono text-zinc-500">
+                Tertunda (Menunggu Penyelesaian SLA): <span className="text-brand-amber font-bold">Rp {pendingBalance.toLocaleString("id-ID")}</span>
+              </div>
+            </div>
+
+            {/* Tombol Interaktif di-wrap di Client Component Terpisah */}
+            <WithdrawalClientWrapper maxBalance={availableBalance} />
+          </div>
         </div>
       </div>
 
-      <div className="max-w-xl mx-auto px-6 mt-8">
+      {/* Tabel Mutasi Buku Besar (Ledger) */}
+      <div className="bg-surface border border-zinc-800 rounded-2xl overflow-hidden">
+        <div className="p-6 border-b border-zinc-800 flex items-center gap-2 bg-surface-elevated">
+          <History className="w-5 h-5 text-zinc-400" />
+          <h3 className="font-bold text-white font-display">Mutasi Buku Besar (Double-Entry Log)</h3>
+        </div>
         
-        {/* Title */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-black text-white font-display">Trainer Balance Withdrawal</h1>
-          <p className="text-zinc-400 text-xs mt-1">
-            Cairkan hasil pendapatan private training Anda secara aman dan instan langsung ke rekening bank terdaftar Anda.
-          </p>
-        </div>
-
-        {/* Balance Status Card */}
-        <div className="bg-gradient-to-br from-zinc-900 to-surface border border-zinc-800 rounded-xl p-6 mb-8 relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-brand-neon" />
-          <span className="text-micro font-mono text-zinc-500 block uppercase tracking-wider mb-1">
-            CURRENT TRAINER NET BALANCE
-          </span>
-          <h3 className="text-3xl font-mono font-black text-white">
-            Rp {balance.toLocaleString("id-ID")}
-          </h3>
-          <p className="text-micro text-brand-neon font-mono mt-3 uppercase flex items-center gap-1.5 leading-none">
-            <CheckCircle2 className="w-3.5 h-3.5" /> 100% Cashless Reconciliation Verified
-          </p>
-        </div>
-
-        {/* Withdrawal Form Card */}
-        <div className="bg-surface border border-zinc-800 rounded-xl p-6 shadow-2xl relative">
-          
-          {success && (
-            <div className="mb-6 p-4 bg-brand-emerald/10 border border-brand-emerald/20 rounded-lg text-xs text-brand-neon flex items-start gap-2.5 leading-normal">
-              <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-brand-neon" />
-              <div>
-                <h5 className="font-bold uppercase font-mono tracking-wider mb-1">Pencairan Sukses</h5>
-                <p>{success}</p>
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="mb-6 p-3 bg-red-950/40 border border-red-500/30 rounded text-xs text-red-400">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleWithdraw} className="space-y-5">
-            {/* BANK SELECTION */}
-            <div>
-              <label className="text-micro font-mono text-zinc-400 uppercase block mb-2">
-                Pilih Bank Tujuan
-              </label>
-              <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                {["BCA", "Mandiri", "BNI", "GoPay"].map((bank) => (
-                  <button
-                    key={bank}
-                    type="button"
-                    onClick={() => setBankName(bank)}
-                    className={`py-2 rounded-lg font-bold border transition-all ${
-                      bankName === bank 
-                        ? "bg-zinc-800 border-brand-neon text-white" 
-                        : "bg-surface-elevated border-zinc-800 text-zinc-500 hover:border-zinc-700"
-                    }`}
-                  >
-                    {bank}
-                  </button>
+        {ledgerHistory && ledgerHistory.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-zinc-400">
+              <thead className="bg-zinc-900/50 font-mono text-xs uppercase border-b border-zinc-800">
+                <tr>
+                  <th className="px-6 py-4">Waktu Transaksi (UTC)</th>
+                  <th className="px-6 py-4">Tipe / Sumber</th>
+                  <th className="px-6 py-4 text-right">Nominal (Rp)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50 font-mono">
+                {ledgerHistory.map((log) => (
+                  <tr key={log.id} className="hover:bg-surface-elevated transition-colors">
+                    <td className="px-6 py-4 text-xs">{new Date(log.created_at).toLocaleString('id-ID')}</td>
+                    <td className="px-6 py-4">
+                      <span className="text-white font-bold">{log.source.replace(/_/g, ' ')}</span>
+                      <span className={`block mt-1 text-micro px-2 py-0.5 rounded w-max ${
+                        log.transaction_type === 'CREDIT' ? 'bg-brand-emerald/10 text-brand-emerald' : 'bg-red-500/10 text-red-400'
+                      }`}>
+                        {log.transaction_type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className={`flex items-center justify-end gap-2 font-bold ${
+                        log.transaction_type === 'CREDIT' ? 'text-brand-emerald' : 'text-red-400'
+                      }`}>
+                        {log.transaction_type === 'CREDIT' ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                        {log.amount.toLocaleString("id-ID")}
+                      </div>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </div>
-
-            {/* ACCOUNT NUMBER */}
-            <div>
-              <label className="text-micro font-mono text-zinc-400 uppercase block mb-1.5">
-                Nomor Rekening / Akun E-Wallet
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-600">
-                  <CreditCard className="w-4 h-4" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="e.g., 8832-198-291"
-                  value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value)}
-                  className="w-full bg-surface-elevated border border-zinc-800 focus:border-brand-neon rounded-lg py-2.5 pl-10 pr-4 text-xs text-foreground placeholder-zinc-700 outline-none transition-all uppercase font-mono"
-                />
-              </div>
-            </div>
-
-            {/* WITHDRAW AMOUNT */}
-            <div>
-              <label className="text-micro font-mono text-zinc-400 uppercase block mb-1.5">
-                Nominal Penarikan (IDR)
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-600">
-                  <DollarSign className="w-4 h-4" />
-                </div>
-                <input
-                  type="number"
-                  placeholder="e.g., 2000000"
-                  value={withdrawAmount}
-                  onChange={(e) => setWithdrawAmount(e.target.value)}
-                  className="w-full bg-surface-elevated border border-zinc-800 focus:border-brand-neon rounded-lg py-2.5 pl-10 pr-4 text-xs text-foreground placeholder-zinc-700 outline-none transition-all font-mono"
-                />
-              </div>
-            </div>
-
-            {/* SUBMIT BUTTON */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-brand-neon hover:bg-brand-emerald text-background font-bold text-xs py-3 rounded-lg flex items-center justify-center gap-2 uppercase tracking-wider font-mono transition-all duration-300 hover:shadow-[0_0_15px_rgba(78,222,163,0.2)] disabled:opacity-50"
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-background border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  <span>Submit Withdrawal Request</span>
-                  <Send className="w-3.5 h-3.5" />
-                </>
-              )}
-            </button>
-          </form>
-        </div>
-
-        {/* Secure disclosure */}
-        <div className="text-center mt-6">
-          <p className="text-micro font-mono text-zinc-600 tracking-wider uppercase">
-            🛡️ RECONCILIATED VIA PAYMENT RECONCILIATION AGENT (PRA) ENGINE
-          </p>
-        </div>
-
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-12 text-center text-zinc-500 text-sm">
+            Belum ada aktivitas transaksi finansial yang terekam pada buku besar Anda.
+          </div>
+        )}
       </div>
     </div>
   );
