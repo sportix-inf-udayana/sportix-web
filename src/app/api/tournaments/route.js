@@ -1,59 +1,102 @@
-import { getSupabase } from "@/lib/supabase";
+import { NextResponse } from "next/server";
+import { getSupabase } from "../../../lib/supabase";
 
 export async function POST(req) {
   const startTime = Date.now();
   try {
     const supabase = getSupabase();
-    if (!supabase) return new Response("Service Unavailable", { status: 503 });
+    if (!supabase) throw new Error("Database offline.");
 
-    // 1. Validasi Sesi JWT Mutlak
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return new Response("Unauthorized", { status: 401 });
+    // 1. Otorisasi Pengguna
+    const authHeader = req.headers.get('Authorization');
+    const token = authHeader ? authHeader.replace('Bearer ', '') : null;
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
-    const body = await req.json();
-    const { tournamentId, teamName } = body;
-
-    if (!tournamentId || !teamName) {
-      return new Response(JSON.stringify({ success: false, message: "Missing registration payload." }), { status: 400 });
+    if (authError || !user) {
+      return new NextResponse(JSON.stringify({ success: false, message: "Akses Ditolak. Silakan login." }), { status: 401 });
     }
 
-    // 2. PENCEGAHAN PRICE MANIPULATION: Tarik harga resmi dari DB Master
+    const { tournamentId, teamName, players } = await req.json();
+
+    if (!tournamentId || !teamName || !Array.isArray(players) || players.length === 0) {
+      return new NextResponse(JSON.stringify({ error: "Payload registrasi turnamen tidak lengkap." }), { status: 400 });
+    }
+
+    // 2. Validasi Kuota (Race Condition Guard)
+    // Ambil data turnamen beserta jumlah pendaftar yang sudah CONFIRMED/PAID
     const { data: tournament, error: tourneyErr } = await supabase
-      .from("tournaments")
-      .select("registration_fee")
-      .eq("id", tournamentId)
+      .from('tournaments')
+      .select('id, max_participants, registration_fee')
+      .eq('id', tournamentId)
       .single();
 
     if (tourneyErr || !tournament) {
-      return new Response(JSON.stringify({ success: false, message: "Tournament not found." }), { status: 404 });
+      return new NextResponse(JSON.stringify({ error: "Turnamen tidak ditemukan." }), { status: 404 });
     }
 
-    // 3. Eksekusi Insert dengan harga yang tidak bisa dimanipulasi peretas
-    const { data: registration, error: insertError } = await supabase
-      .from("tournament_registrations")
+    const { count, error: countErr } = await supabase
+      .from('tournament_registrations')
+      .select('*', { count: 'exact', head: true })
+      .eq('tournament_id', tournamentId)
+      .neq('status', 'CANCELLED');
+
+    if (countErr) throw countErr;
+
+    if (count >= tournament.max_participants) {
+      return new NextResponse(JSON.stringify({ 
+        success: false, 
+        message: "Pendaftaran ditolak. Kuota turnamen telah penuh." 
+      }), { status: 409 });
+    }
+
+    // 3. Injeksi Transaksi Registrasi
+    const { data: registration, error: regErr } = await supabase
+      .from('tournament_registrations')
       .insert({
-        tournament_id: tournamentId,
+        tournament_id: tournament.id,
         user_id: user.id,
-        team_name: teamName,
-        status: "PENDING",
-        payment_status: "PENDING",
-        payment_method: "MIDTRANS_FULL"
-        // Catatan: Jika ada kolom harga di tabel ini, masukkan tournament.registration_fee, BUKAN dari req body
+        team_name: teamName.trim(),
+        status: 'PENDING',
+        payment_status: 'PENDING',
+        payment_method: 'MIDTRANS_FULL'
       })
-      .select()
+      .select('id')
       .single();
 
-    if (insertError) throw insertError;
+    if (regErr) throw regErr;
 
-    return new Response(JSON.stringify({
+    // 4. Injeksi Roster Pemain secara Massal (Bulk Insert)
+    const rosterPayload = players.map(player => ({
+      registration_id: registration.id,
+      player_name: player.name.trim(),
+      identity_number: player.identity.trim()
+    }));
+
+    const { error: rosterErr } = await supabase
+      .from('tournament_players')
+      .insert(rosterPayload);
+
+    if (rosterErr) {
+      // Rollback manual jika gagal
+      await supabase.from('tournament_registrations').delete().eq('id', registration.id);
+      throw rosterErr;
+    }
+
+    // 5. SOLUSI KONTRADIKSI TIPE DATA UUID vs STRING PREFIX
+    // Berikan Order ID khusus untuk Midtrans dengan merangkai prefix TRN- ke UUID
+    const midtransOrderId = `TRN-${registration.id}`;
+
+    return NextResponse.json({
       success: true,
-      message: "Tournament registration locked. Proceed to payment.",
-      registrationId: registration.id,
-      amountToPay: tournament.registration_fee, // Berikan info ke klien untuk display Midtrans
+      message: "Registrasi diinisialisasi. Menunggu pembayaran.",
+      registrationId: registration.id, // ID murni untuk routing internal
+      midtransOrderId: midtransOrderId, // ID komposit untuk payment gateway
+      amount: tournament.registration_fee,
       executionMs: Date.now() - startTime
-    }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
 
   } catch (error) {
-    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500 });
+    console.error("Tournament API Error:", error);
+    return new NextResponse(JSON.stringify({ success: false, error: "Kesalahan server internal." }), { status: 500 });
   }
 }

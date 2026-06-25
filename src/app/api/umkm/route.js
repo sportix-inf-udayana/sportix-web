@@ -1,91 +1,72 @@
-import { getSupabase } from "@/lib/supabase";
+import { NextResponse } from "next/server";
+import { getSupabase } from "../../../lib/supabase";
 
 export async function POST(req) {
-  const startTime = Date.now();
   try {
     const supabase = getSupabase();
-    if (!supabase) return new Response("Service Unavailable", { status: 503 });
+    if (!supabase) throw new Error("Database offline.");
 
-    // 1. Validasi Sesi JWT Mutlak
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return new Response("Unauthorized", { status: 401 });
+    // 1. Otorisasi Mutlak: Penegakan Hak Akses UMKM Seller
+    const authHeader = req.headers.get('Authorization');
+    const token = authHeader ? authHeader.replace('Bearer ', '') : null;
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user || user.user_metadata?.role !== 'UMKM_SELLER') {
+      return new NextResponse(JSON.stringify({ 
+        success: false, 
+        message: "Forbidden. Hanya akun Penjual UMKM yang tervalidasi yang dapat menambah produk." 
+      }), { status: 403 });
+    }
 
     const body = await req.json();
-    const { cartItems, shippingAddress } = body; 
-    // cartItems format: [{ productId: "uuid", quantity: 2 }, ...]
+    const { name, description, price, stock } = body;
 
-    if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0 || !shippingAddress) {
-      return new Response(JSON.stringify({ success: false, message: "Invalid cart payload or missing address." }), { status: 400 });
+    if (!name || !price || stock === undefined) {
+      return new NextResponse(JSON.stringify({ error: "Parameter nama, harga, dan stok wajib diisi." }), { status: 400 });
     }
 
-    // 2. SERVER-SIDE CART VALIDATION (Pencegahan Price Manipulation)
-    let calculatedTotalAmount = 0;
-    const validatedOrderItems = [];
+    // 2. Cegah Injeksi Lintas Toko (Cross-Store Injection)
+    // Jangan pernah percaya store_id dari payload frontend. Tarik id toko berdasarkan user.id.
+    const { data: store, error: storeErr } = await supabase
+      .from('umkm_stores')
+      .select('id, status')
+      .eq('owner_id', user.id)
+      .single();
 
-    for (const item of cartItems) {
-      const { data: productData, error: prodErr } = await supabase
-        .from("umkm_products")
-        .select("price, stock")
-        .eq("id", item.productId)
-        .single();
-
-      if (prodErr || !productData) {
-        return new Response(JSON.stringify({ success: false, message: `Product ${item.productId} not found.` }), { status: 404 });
-      }
-
-      if (productData.stock < item.quantity) {
-        return new Response(JSON.stringify({ success: false, message: "Insufficient stock for one or more items." }), { status: 409 });
-      }
-
-      const itemTotal = Number(productData.price) * Number(item.quantity);
-      calculatedTotalAmount += itemTotal;
-
-      validatedOrderItems.push({
-        product_id: item.productId,
-        quantity: item.quantity,
-        price: productData.price // Harga eceran saat transaksi terjadi
-      });
+    if (storeErr || !store) {
+      return new NextResponse(JSON.stringify({ error: "Toko tidak ditemukan. Pastikan Anda telah terdaftar." }), { status: 404 });
     }
 
-    // 3. Pembuatan Induk Transaksi
-    const { data: orderHeader, error: orderErr } = await supabase
-      .from("umkm_orders")
+    if (store.status !== 'APPROVED') {
+      return new NextResponse(JSON.stringify({ error: "Operasi ditolak. Toko Anda belum disetujui oleh Super Admin." }), { status: 403 });
+    }
+
+    // 3. Eksekusi Penambahan Katalog dengan Constraint Fisik Database
+    const { data: newProduct, error: insertErr } = await supabase
+      .from('umkm_products')
       .insert({
-        user_id: user.id,
-        total_amount: calculatedTotalAmount, // Menggunakan total perhitungan server, BUKAN dari klien
-        shipping_address: shippingAddress,
-        status: "PENDING"
+        store_id: store.id,
+        name: name.trim(),
+        description: description?.trim() || "",
+        price: Number(price),
+        stock: Math.max(0, parseInt(stock, 10)) // Cegah stok negatif
       })
       .select()
       .single();
 
-    if (orderErr) throw orderErr;
-
-    // 4. Injeksi Rincian Item (Order Items)
-    const orderItemsToInsert = validatedOrderItems.map(item => ({
-      order_id: orderHeader.id,
-      ...item
-    }));
-
-    const { error: itemInsertErr } = await supabase
-      .from("umkm_order_items")
-      .insert(orderItemsToInsert);
-
-    if (itemInsertErr) {
-      // Rollback manual (Idealnya pakai RPC untuk Postgres transaction blok utuh)
-      await supabase.from("umkm_orders").delete().eq("id", orderHeader.id);
-      throw itemInsertErr;
+    if (insertErr) {
+      console.error("UMKM Product Insert Error:", insertErr);
+      return new NextResponse(JSON.stringify({ error: "Gagal menyimpan produk ke katalog database." }), { status: 500 });
     }
 
-    return new Response(JSON.stringify({
+    return NextResponse.json({
       success: true,
-      message: "UMKM Order validated and locked.",
-      orderId: orderHeader.id,
-      calculatedAmount: calculatedTotalAmount,
-      executionMs: Date.now() - startTime
-    }), { status: 200, headers: { "Content-Type": "application/json" } });
+      message: "Produk berhasil ditambahkan ke etalase konsinyasi.",
+      product: newProduct
+    });
 
   } catch (error) {
-    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500 });
+    console.error("UMKM API Error:", error);
+    return new NextResponse(JSON.stringify({ success: false, error: "Kesalahan server internal." }), { status: 500 });
   }
 }

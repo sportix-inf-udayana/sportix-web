@@ -1,266 +1,129 @@
-"use client";
+import React from "react";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import { PackageSearch, Store, Plus, AlertOctagon } from "lucide-react";
 
-import React, { useState } from "react";
-import { 
-  Briefcase, 
-  Plus, 
-  Trash2, 
-  RefreshCw, 
-  ShoppingBag,
-  Truck,
-  Layers,
-  ArrowRight
-} from "lucide-react";
-
-export default function SellerProductsPage() {
-  const [products, setProducts] = useState([
-    { id: "prod-1", name: "Velocity Strike Cleats", price: 2450000, stock: 12, category: "Shoes" },
-    { id: "prod-2", name: "AeroCore Jersey Home", price: 850000, stock: 45, category: "Apparel" },
-    { id: "prod-3", name: "Match Pro Ball", price: 1200000, stock: 2, category: "Gear" },
-    { id: "prod-4", name: "GripTech Gloves", price: 450000, stock: 28, category: "Gear" }
-  ]);
-
-  const [newName, setNewName] = useState("");
-  const [newPrice, setNewPrice] = useState("");
-  const [newStock, setNewStock] = useState("");
-  const [newCategory, setNewCategory] = useState("Gear");
-  const [adding, setAdding] = useState(false);
-
-  const handleAddProduct = (e) => {
-    e.preventDefault();
-    if (!newName || !newPrice || !newStock) {
-      alert("Harap isi semua kolom untuk menambahkan produk baru!");
-      return;
+export default async function UmkmProductsPage() {
+  const cookieStore = cookies();
+  
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+      },
     }
+  );
 
-    setAdding(true);
-    setTimeout(() => {
-      const newProduct = {
-        id: `prod-${Date.now()}`,
-        name: newName,
-        price: parseFloat(newPrice),
-        stock: parseInt(newStock),
-        category: newCategory
-      };
-      setProducts([...products, newProduct]);
-      setNewName("");
-      setNewPrice("");
-      setNewStock("");
-      setAdding(false);
-    }, 1000);
-  };
+  // 1. Verifikasi Identitas UMKM
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return <div className="p-8 text-red-500 font-mono">Fatal: Akses Ditolak.</div>;
+  }
 
-  const handleUpdateStock = (id, delta) => {
-    setProducts(products.map(p => {
-      if (p.id === id) {
-        return { ...p, stock: Math.max(0, p.stock + delta) };
-      }
-      return p;
-    }));
-  };
+  // 2. Tarik Data Toko Konsinyasi
+  const { data: store, error: storeError } = await supabase
+    .from("umkm_stores")
+    .select("id, name, status, venues(name)")
+    .eq("owner_id", user.id)
+    .single();
 
-  const handleRemoveProduct = (id) => {
-    if (confirm("Apakah Anda yakin ingin menghapus produk konsinyasi ini?")) {
-      setProducts(products.filter(p => p.id !== id));
-    }
-  };
+  if (storeError || !store) {
+    return (
+      <div className="max-w-7xl mx-auto px-6 mt-8 border border-brand-amber/30 bg-brand-amber/10 p-6 rounded-xl">
+        <h3 className="text-brand-amber font-bold flex items-center gap-2">
+          <AlertOctagon className="w-5 h-5" /> Toko Belum Terdaftar
+        </h3>
+        <p className="text-zinc-400 text-sm mt-2">
+          Sistem tidak dapat menemukan entitas toko yang terikat dengan akun Anda. Silakan hubungi Super Admin.
+        </p>
+      </div>
+    );
+  }
 
-  const navigateTo = (path) => {
-    window.location.hash = path;
-    if (window.__sportixNavigate) {
-      window.__sportixNavigate(path);
-    }
-  };
+  // 3. Tarik Inventaris Produk Otonom
+  const { data: products, error: productsError } = await supabase
+    .from("umkm_products")
+    .select("*")
+    .eq("store_id", store.id)
+    .order("created_at", { ascending: false });
+
+  if (productsError) throw productsError;
 
   return (
-    <div className="bg-background text-foreground min-h-screen pb-16 font-sans select-none">
-      
-      {/* Top Header & Navigation Switch */}
-      <div className="border-b border-zinc-800 bg-surface-elevated sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
-              <Briefcase className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-micro font-mono text-zinc-500 block leading-none">MERCHANT PORTAL</span>
-              <h2 className="text-base font-black text-white font-display">UMKM Seller Portal</h2>
-            </div>
-          </div>
-
-          <div className="flex bg-surface border border-zinc-800/80 p-1 rounded-lg">
-            <button 
-              onClick={() => navigateTo("/seller-umkm/products")}
-              className="bg-surface-hover text-white px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 border border-zinc-800"
-            >
-              <Layers className="w-3.5 h-3.5 text-purple-400" />
-              <span>INVENTORY MGR</span>
-            </button>
-            <button 
-              onClick={() => navigateTo("/seller-umkm/orders")}
-              className="text-zinc-500 hover:text-zinc-300 px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
-            >
-              <Truck className="w-3.5 h-3.5" />
-              <span>SHIPMENT ORDERS</span>
-            </button>
+    <div className="max-w-7xl mx-auto px-6 mt-8 font-sans">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+        <div>
+          <span className="text-xs font-mono text-zinc-500 tracking-wider uppercase block mb-1">
+            KONSINYASI VENUE: {store.venues?.name || "TIDAK TERIKAT"}
+          </span>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-white font-display flex items-center gap-3">
+            <Store className="w-8 h-8 text-brand-emerald" /> {store.name}
+          </h1>
+          <div className="flex items-center gap-2 mt-2">
+            <span className={`text-xs font-mono px-2 py-0.5 rounded border uppercase tracking-wider ${
+              store.status === 'APPROVED' 
+                ? 'bg-brand-emerald/10 text-brand-emerald border-brand-emerald/30' 
+                : 'bg-brand-amber/10 text-brand-amber border-brand-amber/30'
+            }`}>
+              STATUS: {store.status}
+            </span>
+            <span className="text-zinc-400 text-xs">Kelola katalog inventaris alat olahraga Anda.</span>
           </div>
         </div>
+
+        <button className="bg-brand-emerald hover:bg-emerald-400 text-black font-black py-2.5 px-5 rounded-lg text-sm flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+          <Plus className="w-4 h-4 font-bold" /> TAMBAH PRODUK BARU
+        </button>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 mt-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-black text-white font-display">Inventory Management</h1>
-          <p className="text-zinc-400 text-xs md:text-sm mt-1">
-            Katalog pengontrol pasokan barang olahraga lokal di Bali. Pasok stok baru, ubah harga jual, dan kelola listing konsinyasi Anda secara instan.
-          </p>
-        </div>
-
-        {/* Dual Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* Active Inventory Catalogue controller table */}
-          <div className="lg:col-span-8 bg-surface border border-zinc-800 rounded-xl p-6">
-            <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-6 flex items-center gap-1.5">
-              <ShoppingBag className="w-4 h-4 text-purple-400" /> ACTIVE CONSIGNMENT GOODS ({products.length})
-            </h3>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-zinc-800 font-mono text-zinc-500 uppercase">
-                    <th className="pb-3 font-semibold">Produk</th>
-                    <th className="pb-3 font-semibold">Kategori</th>
-                    <th className="pb-3 font-semibold">Harga Konsinyasi</th>
-                    <th className="pb-3 font-semibold text-center">Stok</th>
-                    <th className="pb-3 font-semibold text-right">Aksi</th>
+      {/* Grid Katalog Produk (SSR) */}
+      <div className="bg-surface border border-zinc-800 rounded-2xl overflow-hidden min-h-[400px]">
+        {products && products.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-zinc-400">
+              <thead className="bg-zinc-900/50 font-mono text-xs uppercase border-b border-zinc-800">
+                <tr>
+                  <th className="px-6 py-4">Nama Produk</th>
+                  <th className="px-6 py-4">Harga Konsinyasi</th>
+                  <th className="px-6 py-4">Sisa Stok Fisik</th>
+                  <th className="px-6 py-4">Status Etalase</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50">
+                {products.map((item) => (
+                  <tr key={item.id} className="hover:bg-surface-elevated transition-colors">
+                    <td className="px-6 py-4 font-bold text-white">{item.name}</td>
+                    <td className="px-6 py-4 font-mono text-brand-neon">
+                      Rp {Number(item.price).toLocaleString("id-ID")}
+                    </td>
+                    <td className="px-6 py-4 font-mono text-white">
+                      {item.stock} Unit
+                    </td>
+                    <td className="px-6 py-4">
+                      {item.stock > 0 ? (
+                        <span className="text-brand-emerald font-mono text-micro bg-brand-emerald/10 px-2 py-1 rounded">TERSEDIA</span>
+                      ) : (
+                        <span className="text-red-400 font-mono text-micro bg-red-500/10 px-2 py-1 rounded">HABIS</span>
+                      )}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60 font-mono">
-                  {products.map((p) => (
-                    <tr key={p.id} className="hover:bg-surface-hover/40">
-                      <td className="py-4 font-sans font-bold text-white pr-2">
-                        {p.name}
-                      </td>
-                      <td className="py-4 text-zinc-400">
-                        {p.category}
-                      </td>
-                      <td className="py-4 text-purple-400 font-bold">
-                        Rp {p.price.toLocaleString("id-ID")}
-                      </td>
-                      <td className="py-4">
-                        <div className="flex items-center justify-center gap-2">
-                          <button 
-                            onClick={() => handleUpdateStock(p.id, -1)}
-                            className="w-5 h-5 bg-surface-elevated border border-zinc-800 rounded text-zinc-400 font-bold flex items-center justify-center hover:border-zinc-700 transition-all"
-                          >
-                            -
-                          </button>
-                          <span className="text-white font-bold w-6 text-center">{p.stock}</span>
-                          <button 
-                            onClick={() => handleUpdateStock(p.id, 1)}
-                            className="w-5 h-5 bg-surface-elevated border border-zinc-800 rounded text-zinc-400 font-bold flex items-center justify-center hover:border-zinc-700 transition-all"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </td>
-                      <td className="py-4 text-right">
-                        <button
-                          onClick={() => handleRemoveProduct(p.id)}
-                          className="text-zinc-600 hover:text-red-400 p-1.5 transition-colors"
-                          title="Hapus Produk"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-
-          {/* Add New Consignment Product */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className="bg-surface border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-4 flex items-center gap-1">
-                <Plus className="w-4 h-4" /> ADD CONSIGNMENT GOODS
-              </h3>
-
-              <form onSubmit={handleAddProduct} className="space-y-4 text-xs">
-                <div>
-                  <label className="text-zinc-400 block mb-1 uppercase tracking-wide font-mono text-micro">
-                    Nama Produk Olahraga
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Strike Jersey Black"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    className="w-full bg-surface-elevated border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-foreground outline-none placeholder-zinc-700"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-zinc-400 block mb-1 uppercase tracking-wide font-mono text-micro">
-                    Kategori
-                  </label>
-                  <select
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    className="w-full bg-surface-elevated border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-foreground outline-none"
-                  >
-                    <option value="Shoes">Shoes</option>
-                    <option value="Apparel">Apparel</option>
-                    <option value="Gear">Gear</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-zinc-400 block mb-1 uppercase tracking-wide font-mono text-micro">
-                    Harga Konsinyasi (Rupiah)
-                  </label>
-                  <input
-                    type="number"
-                    placeholder="e.g., 850000"
-                    value={newPrice}
-                    onChange={(e) => setNewPrice(e.target.value)}
-                    className="w-full bg-surface-elevated border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-foreground outline-none placeholder-zinc-700 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-zinc-400 block mb-1 uppercase tracking-wide font-mono text-micro">
-                    Stok Awal
-                  </label>
-                  <input
-                    type="number"
-                    placeholder="e.g., 20"
-                    value={newStock}
-                    onChange={(e) => setNewStock(e.target.value)}
-                    className="w-full bg-surface-elevated border border-zinc-800 focus:border-purple-500 rounded-lg py-2 px-3 text-foreground outline-none placeholder-zinc-700 font-mono"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={adding}
-                  className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 uppercase tracking-wider font-mono transition-all"
-                >
-                  {adding ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <span>Tambahkan Listing</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </>
-                  )}
-                </button>
-              </form>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full py-20 text-center">
+            <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-4 border border-zinc-800 shadow-inner">
+              <PackageSearch className="w-6 h-6 text-zinc-600" />
             </div>
+            <h3 className="text-white font-bold mb-1">Katalog Kosong</h3>
+            <p className="text-zinc-500 text-sm max-w-md">
+              Anda belum mengunggah produk alat olahraga apa pun ke etalase venue ini. Klik tombol &quot;Tambah Produk Baru&quot; untuk memulai konsinyasi.
+            </p>
           </div>
-
-        </div>
+        )}
       </div>
     </div>
   );
