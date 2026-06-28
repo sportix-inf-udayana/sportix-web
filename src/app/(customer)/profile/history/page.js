@@ -4,10 +4,12 @@ import { createServerClient } from "@supabase/ssr";
 import Link from "next/link";
 import { Award, Ticket, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 
-// Memaksa halaman untuk mengambil data segar, bukan cache statis
+// Path relatif murni
+import { getUserTicketHistory } from "../../../../../lib/services/customer.service";
+
 export const dynamic = 'force-dynamic';
 
-// Komponen Barcode Murni (Tidak membutuhkan interaktivitas klien)
+// Komponen Barcode Statis (Tidak membutuhkan Client Component)
 const Barcode = ({ code }) => {
   return (
     <div className="flex flex-col items-center p-4 bg-white rounded-lg border border-zinc-200">
@@ -50,7 +52,6 @@ export default async function ProfileHistoryPage() {
     { cookies: { getAll() { return cookieStore.getAll(); } } }
   );
 
-  // 1. Otorisasi Pengguna Lapis Server
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   
   if (authError || !user) {
@@ -65,26 +66,11 @@ export default async function ProfileHistoryPage() {
     );
   }
 
-  // 2. Ekstraksi Data Tiket Aktual dari Tabel Reservasi (Single Source of Truth)
-  const { data: tickets, error: ticketsErr } = await supabase
-    .from("reservations")
-    .select(`
-      id, 
-      status, 
-      barcode_token, 
-      booking_date, 
-      start_time,
-      slots ( price, time, venues ( name ) )
-    `)
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
-
-  // Kalkulasi statistik otonom untuk UI
-  const activeTickets = tickets?.filter(t => t.status === "CONFIRMED") || [];
+  // Eksekusi Data Layer
+  const { tickets, activeTickets } = await getUserTicketHistory(supabase, user.id);
 
   return (
     <div className="bg-background text-foreground min-h-screen pb-16 font-sans select-none">
-      {/* Header Container */}
       <div className="border-b border-zinc-800 bg-surface-elevated py-6 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center gap-3.5 mb-2">
@@ -101,7 +87,6 @@ export default async function ProfileHistoryPage() {
         </div>
       </div>
 
-      {/* Tabs Row */}
       <div className="max-w-7xl mx-auto px-6 mt-8">
         <div className="flex border-b border-zinc-800/80 gap-6 mb-8">
           <div className="pb-4 text-sm relative text-brand-neon font-bold flex items-center">
@@ -121,9 +106,7 @@ export default async function ProfileHistoryPage() {
           </Link>
         </div>
 
-        {/* Tab Content: Tickets (SSR) */}
         <div className="space-y-8">
-          {/* Warning Rule Bar (Kepatuhan SRS) */}
           <div className="bg-surface-hover border-l-2 border-brand-amber p-4 rounded-r-lg flex gap-3.5 items-start">
             <AlertTriangle className="w-5 h-5 text-brand-amber shrink-0 mt-0.5 glow-amber" />
             <div>
@@ -165,13 +148,11 @@ export default async function ProfileHistoryPage() {
                       isForfeited ? "border-red-500/30" : "border-zinc-800 opacity-70"
                     }`}
                   >
-                    {/* Top color strap */}
                     <div className={`h-1.5 ${
                       isActive ? "bg-brand-emerald glow-emerald" : 
                       isForfeited ? "bg-red-500 glow-red" : "bg-zinc-600"
                     }`} />
 
-                    {/* Ticket content */}
                     <div className="p-5 flex-1">
                       <div className="flex justify-between items-start mb-4 gap-2">
                         <div>
@@ -187,7 +168,6 @@ export default async function ProfileHistoryPage() {
                         </span>
                       </div>
 
-                      {/* Details */}
                       <div className="grid grid-cols-2 gap-y-3 gap-x-4 border-y border-zinc-800/80 py-4 mb-4 text-xs font-mono">
                         <div>
                           <span className="text-micro text-zinc-500 uppercase block">PLAY DATE</span>
@@ -207,10 +187,8 @@ export default async function ProfileHistoryPage() {
                         </div>
                       </div>
 
-                      {/* Conditional Footer Status */}
                       {isActive ? (
                         <div className="mt-4 space-y-3">
-                          {/* Render Barcode dengan UUID Token Absolut dari Server */}
                           <Barcode code={t.barcode_token || t.id} />
                           <p className="text-micro font-mono text-center text-zinc-500 uppercase tracking-widest leading-none mt-1">
                             TAP BARCODE UNDER SCANNER LUMINARY

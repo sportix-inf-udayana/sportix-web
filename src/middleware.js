@@ -27,7 +27,10 @@ export async function middleware(request) {
   const isApiRoute = url.pathname.startsWith("/api");
   const isPublicWebhook = url.pathname.startsWith("/api/payments/webhook") || url.pathname.startsWith("/api/cron");
 
-  // 1. Blokir akses tanpa otentikasi
+  // Rute Transaksional yang HARUS diproteksi ketat
+  const isTransactionalRoute = url.pathname.startsWith("/checkout") || url.pathname.startsWith("/booking");
+
+  // 1. Blokir Akses Tanpa Otentikasi
   if (!user && !isPublicWebhook) {
     if (isApiRoute) {
       return new NextResponse(
@@ -36,7 +39,15 @@ export async function middleware(request) {
       );
     }
     
-    // Rute terproteksi harus dialihkan ke login
+    // Auth-Gate: Arahkan ke login dengan membawa jejak URL (callback) agar UX tidak rusak
+    if (isTransactionalRoute) {
+      const callbackPath = encodeURIComponent(url.pathname + url.search);
+      url.pathname = "/login";
+      url.search = `?callback=${callbackPath}`;
+      return NextResponse.redirect(url);
+    }
+
+    // Rute dashboard terproteksi
     if (url.pathname.startsWith("/super-admin") || 
         url.pathname.startsWith("/admin-venue") || 
         url.pathname.startsWith("/coach") || 
@@ -47,8 +58,7 @@ export async function middleware(request) {
     }
   }
 
-  // 2. BLIND SPOT PATCHED: Penegakan RBAC (Role-Based Access Control)
-  // Asumsi arsitektur: Role disimpan di user_metadata saat registrasi agar bisa dibaca Edge Middleware
+  // 2. RBAC (Role-Based Access Control)
   if (user) {
     const role = user.user_metadata?.role || 'CUSTOMER';
 
@@ -61,7 +71,6 @@ export async function middleware(request) {
 
     for (const [route, requiredRole] of Object.entries(roleMap)) {
       if (url.pathname.startsWith(route) && role !== requiredRole) {
-        // Logika brutal: Tendang pengguna yang mencoba eskalasi hak akses kembali ke beranda
         console.warn(`SECURITY ALERT: User ${user.id} (${role}) attempted to access ${route}`);
         url.pathname = "/"; 
         return NextResponse.redirect(url);
@@ -72,6 +81,7 @@ export async function middleware(request) {
   return supabaseResponse;
 }
 
+// WAJIB ADA: Jika rute tidak didaftarkan di matcher, middleware tidak akan pernah mendeteksinya.
 export const config = {
   matcher: [
     "/api/:path*",
@@ -80,5 +90,7 @@ export const config = {
     "/coach/:path*",
     "/seller-umkm/:path*",
     "/profile/:path*",
+    "/checkout/:path*",
+    "/booking/:path*",
   ],
 };

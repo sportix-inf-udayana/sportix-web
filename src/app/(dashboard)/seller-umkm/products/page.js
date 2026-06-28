@@ -3,31 +3,26 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { PackageSearch, Store, Plus, AlertOctagon } from "lucide-react";
 
+// Path relatif absolut sesuai instruksi
+import { getUmkmStoreAndProducts } from "../../../../lib/services/umkm.service";
+
+export const dynamic = 'force-dynamic';
+
 export default async function UmkmProductsPage() {
   const cookieStore = cookies();
-  
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll(); },
-      },
-    }
+    { cookies: { getAll() { return cookieStore.getAll(); } } }
   );
 
-  // 1. Verifikasi Identitas UMKM
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return <div className="p-8 text-red-500 font-mono">Fatal: Akses Ditolak.</div>;
   }
 
-  // 2. Tarik Data Toko Konsinyasi
-  const { data: store, error: storeError } = await supabase
-    .from("umkm_stores")
-    .select("id, name, status, venues(name)")
-    .eq("owner_id", user.id)
-    .single();
+  // Pengambilan data via Data Layer terpusat
+  const { store, products, error: storeError } = await getUmkmStoreAndProducts(supabase, user.id);
 
   if (storeError || !store) {
     return (
@@ -41,15 +36,6 @@ export default async function UmkmProductsPage() {
       </div>
     );
   }
-
-  // 3. Tarik Inventaris Produk Otonom
-  const { data: products, error: productsError } = await supabase
-    .from("umkm_products")
-    .select("*")
-    .eq("store_id", store.id)
-    .order("created_at", { ascending: false });
-
-  if (productsError) throw productsError;
 
   return (
     <div className="max-w-7xl mx-auto px-6 mt-8 font-sans">
@@ -73,12 +59,11 @@ export default async function UmkmProductsPage() {
           </div>
         </div>
 
-        <button className="bg-brand-emerald hover:bg-emerald-400 text-black font-black py-2.5 px-5 rounded-lg text-sm flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+        <button className="bg-brand-emerald hover:bg-emerald-400 text-black font-black py-2.5 px-5 rounded-lg text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.2)]">
           <Plus className="w-4 h-4 font-bold" /> TAMBAH PRODUK BARU
         </button>
       </div>
 
-      {/* Grid Katalog Produk (SSR) */}
       <div className="bg-surface border border-zinc-800 rounded-2xl overflow-hidden min-h-[400px]">
         {products && products.length > 0 ? (
           <div className="overflow-x-auto">
@@ -120,7 +105,7 @@ export default async function UmkmProductsPage() {
             </div>
             <h3 className="text-white font-bold mb-1">Katalog Kosong</h3>
             <p className="text-zinc-500 text-sm max-w-md">
-              Anda belum mengunggah produk alat olahraga apa pun ke etalase venue ini. Klik tombol &quot;Tambah Produk Baru&quot; untuk memulai konsinyasi.
+              Anda belum mengunggah produk alat olahraga apa pun ke etalase venue ini.
             </p>
           </div>
         )}

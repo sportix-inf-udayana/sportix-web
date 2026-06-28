@@ -1,111 +1,169 @@
-"use client";
+import React from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import {
+  ArrowLeft, MapPin, Star, Shield, Award, Layers,
+  Share2, Heart, Calendar, AlertCircle
+} from "lucide-react";
 
-import React, { useState } from "react";
-import { ArrowLeft, AlertTriangle } from "lucide-react";
-import { useRouter } from "next/navigation";
+// Path relatif murni
+import { getVenueDetail } from "../../../../lib/services/customer.service";
 
-// Menggunakan relative path mutlak sesuai instruksi Clean Architecture
-import DateCarousel from "../../../../components/booking/DateCarousel";
-import SlotGrid from "../../../../components/booking/SlotGrid";
-import PaymentDrawer from "../../../../components/booking/PaymentDrawer";
+export const dynamic = 'force-dynamic';
 
-export default function BookingGridPage() {
-  const router = useRouter();
+export default async function VenueDetailPage({ params }) {
+  const { id } = params; 
   
-  const [selectedDate, setSelectedDate] = useState("WE 24");
-  const [selectedSlot, setSelectedSlot] = useState(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    { cookies: { getAll() { return cookieStore.getAll(); } } }
+  );
 
-  // Data statis awal (seharusnya di-fetch dari Supabase via server component di iterasi berikutnya)
-  const dates = [
-    { label: "WE 24", day: "WE", num: "24", sub: "TODAY" },
-    { label: "TH 25", day: "TH", num: "25", sub: "25" },
-    { label: "FR 26", day: "FR", num: "26", sub: "26" },
-    { label: "SA 27", day: "SA", num: "27", sub: "27" },
-  ];
+  // Panggil Data Layer Terpusat
+  const { venue, error } = await getVenueDetail(supabase, id);
 
-  const initialSlots = [
-    { id: "s1", time: "08:00", state: "BOOKED" },
-    { id: "s2", time: "09:00", state: "LOCKED" },
-    { id: "s3", time: "10:00", state: "AVAILABLE", price: 150000 },
-    { id: "s4", time: "11:00", state: "AVAILABLE", price: 150000 },
-    { id: "s5", time: "12:00", state: "BOOKED" },
-  ];
-
-  const handleSlotSelect = (slot) => {
-    setSelectedSlot(slot);
-    setIsDrawerOpen(true);
-  };
+  if (error || !venue) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6">
+         <div className="bg-red-500/10 border border-red-500/30 p-8 rounded-2xl max-w-md text-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h1 className="text-xl font-bold text-white mb-2 font-display">Arena Tidak Ditemukan</h1>
+            <p className="text-zinc-400 text-sm mb-6">Fasilitas olahraga dengan ID yang diminta tidak ada di pangkalan data kami atau belum disetujui Super Admin.</p>
+            <Link href="/" className="bg-zinc-800 text-white px-6 py-2 rounded-lg font-bold text-sm">Kembali ke Beranda</Link>
+         </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-background text-foreground min-h-screen pb-24 font-sans select-none relative">
-      <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-brand-emerald/5 rounded-full blur-[100px] pointer-events-none" />
-
-      {/* Header Terisolasi */}
-      <div className="border-b border-zinc-800 bg-surface-elevated/95 py-4 px-6 sticky top-0 z-40 backdrop-blur-md">
+    <div className="bg-background text-foreground min-h-screen pb-16 font-sans">
+      <div className="border-b border-zinc-800 bg-surface-elevated py-4 px-6 sticky top-0 z-50 backdrop-blur-md bg-opacity-90">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <button
-            onClick={() => router.push("/venues/academy-stadium")}
-            className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors text-sm cursor-pointer"
+          <Link
+            href="/"
+            className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors text-sm"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Kembali ke Detail Venue</span>
-          </button>
-          <div className="text-right">
-            <span className="text-micro font-mono text-zinc-500 uppercase block">VENUE</span>
-            <span className="text-xs font-bold text-white uppercase tracking-wider">Academy Stadium</span>
+            <span>Kembali ke Exploration</span>
+          </Link>
+          <div className="flex gap-2">
+            <button className="p-2 rounded bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition-all cursor-pointer">
+              <Share2 className="w-4 h-4" />
+            </button>
+            <button className="p-2 rounded bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition-all cursor-pointer">
+              <Heart className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 mt-8">
-        <div className="mb-8">
-          <span className="text-xs font-mono text-zinc-500 tracking-wider uppercase block mb-1">
-            DOWNTOWN COMPLEX
-          </span>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-white font-display">
-            Pemesanan & Jadwal Lapangan
-          </h1>
-          <p className="text-zinc-400 text-xs md:text-sm mt-1">
-            Premium indoor 5v5 turf. Dilengkapi dengan lampu sorot floodlit & permukaan sintetis standar atletik.
-          </p>
+      <div className="max-w-7xl mx-auto px-6 mt-6">
+        {/* Sisanya menggunakan variabel venue dengan aman */}
+        <div className="relative h-[480px] rounded-xl overflow-hidden mb-8 group shadow-2xl bg-zinc-950">
+          <Image
+            src="https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&q=80&w=1200"
+            alt={venue.name}
+            fill
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-90" />
+
+          <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="bg-brand-emerald text-black text-micro font-mono font-black px-2 py-0.5 rounded uppercase tracking-wider glow-emerald">
+                  Verified Complex
+                </span>
+                <span className="bg-zinc-800/80 backdrop-blur border border-zinc-700 text-white text-micro font-mono px-2 py-0.5 rounded">
+                  {venue.id.substring(0,8)}...
+                </span>
+              </div>
+              <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white mb-2 font-display">
+                {venue.name}
+              </h1>
+              <div className="flex items-center gap-4 text-sm text-zinc-300 font-sans">
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-4 h-4 text-red-500" />
+                  <span>{venue.address || "Lokasi belum dilengkapi"}</span>
+                </div>
+                <div className="flex items-center gap-1 text-brand-amber">
+                  <Star className="w-4 h-4 fill-brand-amber text-brand-amber" />
+                  <span className="font-bold">4.9</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Delegasi Komponen UI */}
-        <DateCarousel 
-          dates={dates} 
-          selectedDate={selectedDate} 
-          onSelectDate={setSelectedDate} 
-        />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-surface-elevated border border-zinc-800 rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4 font-display">Detail Arena</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="p-3 bg-background rounded border border-zinc-800/60 flex items-center gap-3">
+                  <Layers className="w-5 h-5 text-brand-neon" />
+                  <div>
+                    <span className="text-micro font-mono text-zinc-500 block uppercase">STATUS HUKUM</span>
+                    <span className="text-xs font-bold text-white">{venue.status}</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-background rounded border border-zinc-800/60 flex items-center gap-3">
+                  <Award className="w-5 h-5 text-purple-400" />
+                  <div>
+                    <span className="text-micro font-mono text-zinc-500 block uppercase">OWNER ID</span>
+                    <span className="text-xs font-bold text-white font-mono break-all">{venue.owner_id?.substring(0,6)}..</span>
+                  </div>
+                </div>
+              </div>
 
-        <SlotGrid 
-          slots={initialSlots} 
-          selectedDate={selectedDate} 
-          onSlotClick={handleSlotSelect} 
-        />
+              <div className="mt-6 text-sm text-zinc-400 leading-relaxed space-y-4 font-sans">
+                <p>Data venue ini ditarik secara langsung dari relasi tabel master PostgreSQL. Setiap pemesanan lapangan akan menggunakan Slot Locking Agent otonom.</p>
+              </div>
+            </div>
 
-        {/* Warning Policy Section */}
-        <div className="mt-8 bg-surface-elevated border border-zinc-800/80 rounded-xl p-5 flex gap-4 items-start">
-          <AlertTriangle className="w-5 h-5 text-brand-amber shrink-0 mt-0.5 shadow-[0_0_20px_rgba(245,158,11,0.15)]" />
+            <div className="bg-amber-950/20 border border-brand-amber/30 rounded-xl p-6">
+              <h3 className="text-brand-amber text-sm font-bold font-mono tracking-wider uppercase mb-3 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-brand-amber" /> Kepatuhan Regulasi Sportix (SLA)
+              </h3>
+              <ul className="space-y-3.5 text-xs text-zinc-400 font-sans">
+                <li className="flex items-start gap-2.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-amber shrink-0 mt-1.5" />
+                  <span><strong className="text-white">Kebijakan Hangus 15 Menit:</strong> Terlambat check-in &gt;15 menit akan menghanguskan tiket secara otomatis tanpa pengecualian.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-amber shrink-0 mt-1.5" />
+                  <span><strong className="text-white">Full Cashless:</strong> Kami tidak menerima pembayaran tunai di tempat. Verifikasi QR Code E-Ticket Anda di pintu masuk.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
           <div>
-            <h4 className="text-xs font-mono uppercase tracking-wider text-brand-amber mb-1">
-              Aturan Ketat Forfeit & No-Show Sebermula 15 Menit
-            </h4>
-            <p className="text-xs text-zinc-400 leading-relaxed font-sans">
-              Semua slot dijamin oleh Slot Locking Agent (SLA). Keterlambatan bermain melebihi <span className="text-brand-amber font-bold">&gt;15 menit</span> terhitung waktu slot akan <span className="text-red-400 font-bold">menghanguskan e-ticket secara sepihak</span>. Dana transaksi disita 100% oleh sistem, dan sisa durasi slot dirilis kembali secara otomatis ke marketplace dengan status <span className="text-brand-neon font-bold">AVAILABLE</span>.
-            </p>
+            <div className="bg-surface-elevated border border-zinc-800 rounded-2xl p-6 sticky top-24 shadow-2xl">
+              <h3 className="text-xs font-mono text-zinc-500 tracking-wider uppercase mb-4">RESERVASI</h3>
+
+              <div className="space-y-3.5 mb-6">
+                <div className="flex items-center gap-2 text-xs text-zinc-400 font-sans">
+                  <Shield className="w-4 h-4 text-brand-emerald shrink-0" />
+                  <span>Slot dijamin Anti-Double Booking</span>
+                </div>
+              </div>
+
+              <Link
+                href={`/booking/${venue.id}`}
+                className="w-full bg-brand-emerald hover:bg-emerald-400 text-black font-black py-4 rounded-xl flex items-center justify-center gap-2 tracking-wide text-sm transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+              >
+                <span>Lihat Jadwal Slot</span>
+                <Calendar className="w-4 h-4" />
+              </Link>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Komponen Laci Pembayaran Modal */}
-      <PaymentDrawer 
-        isOpen={isDrawerOpen} 
-        onClose={() => setIsDrawerOpen(false)} 
-        selectedDate={selectedDate}
-        selectedSlot={selectedSlot}
-        venueName="Academy Stadium"
-      />
     </div>
   );
 }
