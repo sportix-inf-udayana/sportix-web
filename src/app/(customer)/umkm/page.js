@@ -3,7 +3,10 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import Link from "next/link";
 import { Award } from "lucide-react";
-import UmkmCatalogClient from "../../components/customer/UmkmCatalogClient";
+
+// Path relatif murni
+import { getUmkmCatalog } from "../../../../lib/services/customer.service";
+import UmkmCatalogClient from "../../../../components/customer/UmkmCatalogClient";
 
 export const dynamic = 'force-dynamic';
 
@@ -15,30 +18,8 @@ export default async function UmkmConsignmentPage() {
     { cookies: { getAll() { return cookieStore.getAll(); } } }
   );
 
-  // Tarik Data Produk Aktual, relasi dengan toko yang berstatus APPROVED saja
-  const { data: products, error } = await supabase
-    .from("umkm_products")
-    .select(`
-      id, name, price, stock, description,
-      umkm_stores!inner ( status )
-    `)
-    .eq("umkm_stores.status", "APPROVED")
-    .gt("stock", 0) // Jangan tampilkan barang habis di etalase utama
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("UMKM Fetch Error:", error);
-  }
-
-  // Fallback Mapping 
-  const liveProducts = products?.map(p => ({
-    id: p.id,
-    name: p.name,
-    price: p.price,
-    stock: p.stock,
-    desc: p.description || "Alat olahraga premium.",
-    image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=400"
-  })) || [];
+  // Eksekusi Data Layer
+  const { products } = await getUmkmCatalog(supabase);
 
   return (
     <div className="bg-background text-foreground min-h-screen pb-16 font-sans select-none relative">
@@ -79,7 +60,7 @@ export default async function UmkmConsignmentPage() {
         </div>
 
         {/* Delegasi Keranjang dan Filter ke Client Component */}
-        <UmkmCatalogClient initialProducts={liveProducts} />
+        <UmkmCatalogClient initialProducts={products} />
       </div>
     </div>
   );
