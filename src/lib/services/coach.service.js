@@ -1,69 +1,59 @@
 export async function getCoachWalletData(supabase, userId) {
-  // 1. Tarik Saldo Dompet Fisik
-  const { data: balanceData, error: balanceError } = await supabase
-    .from("balances")
-    .select("available_balance, pending_balance")
-    .eq("user_id", userId)
-    .single();
+  try {
+    // Optimasi: Fetch balance dan ledger secara paralel
+    const [balanceRes, ledgerRes] = await Promise.all([
+      supabase.from("balances").select("available_balance, pending_balance").eq("user_id", userId).single(),
+      supabase.from("ledger_transactions").select("id, transaction_type, source, amount, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(20)
+    ]);
 
-  // 2. Tarik Riwayat Buku Besar (Ledger Transactions)
-  const { data: ledgerHistory, error: ledgerError } = await supabase
-    .from("ledger_transactions")
-    .select("id, transaction_type, source, amount, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(20);
+    if (balanceRes.error) throw balanceRes.error;
 
-  if (balanceError || ledgerError) {
-    console.error("Fetch Coach Wallet Error:", balanceError || ledgerError);
+    return {
+      data: {
+        availableBalance: balanceRes.data?.available_balance || 0,
+        pendingBalance: balanceRes.data?.pending_balance || 0,
+        ledgerHistory: ledgerRes.data || [],
+      },
+      error: null
+    };
+  } catch (error) {
+    console.error("Fetch Coach Wallet Error:", error);
+    return { data: null, error };
   }
-
-  return {
-    availableBalance: balanceData?.available_balance || 0,
-    pendingBalance: balanceData?.pending_balance || 0,
-    ledgerHistory: ledgerHistory || [],
-  };
 }
 
 export async function getCoachScheduleData(supabase, userId) {
-  const { data: coachProfile } = await supabase
-    .from("coaches")
-    .select("id")
-    .eq("user_id", userId)
-    .single();
+  try {
+    // 1. Ambil Profil Pelatih terlebih dahulu karena data lain bergantung padanya
+    const { data: coachProfile, error: profileErr } = await supabase
+      .from("coaches")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
 
-  if (!coachProfile) return { coachProfile: null };
+    if (profileErr) throw profileErr;
+    if (!coachProfile) return { data: { coachProfile: null }, error: null };
 
-  const { data: balanceData } = await supabase
-    .from("balances")
-    .select("available_balance")
-    .eq("user_id", userId)
-    .single();
+    const today = new Date().toISOString().split('T')[0];
 
-  const { data: recentActivity } = await supabase
-    .from("ledger_transactions")
-    .select("id, source, amount, created_at, transaction_type")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(3);
+    // 2. Fetch data paralel untuk dashboard utama
+    const [balanceRes, activityRes, scheduleRes] = await Promise.all([
+      supabase.from("balances").select("available_balance").eq("user_id", userId).single(),
+      supabase.from("ledger_transactions").select("id, source, amount, created_at, transaction_type").eq("user_id", userId).order("created_at", { ascending: false }).limit(3),
+      supabase.from("coach_bookings").select("id, booking_date, start_time, end_time, status, users (full_name)").eq("coach_id", coachProfile.id).gte("booking_date", today).order("booking_date", { ascending: true }).order("start_time", { ascending: true }).limit(10)
+    ]);
 
-  const today = new Date().toISOString().split('T')[0];
-  const { data: schedules } = await supabase
-    .from("coach_bookings")
-    .select(`
-      id, booking_date, start_time, end_time, status,
-      users (full_name)
-    `)
-    .eq("coach_id", coachProfile.id)
-    .gte("booking_date", today)
-    .order("booking_date", { ascending: true })
-    .order("start_time", { ascending: true })
-    .limit(10);
-
-  return {
-    coachProfile,
-    balance: balanceData?.available_balance || 0,
-    recentActivity: recentActivity || [],
-    schedules: schedules || []
-  };
+    return {
+      data: {
+        coachProfile,
+        balance: balanceRes.data?.available_balance || 0,
+        recentActivity: activityRes.data || [],
+        schedules: scheduleRes.data || []
+      },
+      error: null
+    };
+  } catch (error) {
+    console.error("Fetch Coach Schedule Error:", error);
+    return { data: null, error };
+  }
 }

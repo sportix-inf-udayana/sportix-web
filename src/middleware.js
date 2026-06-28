@@ -39,7 +39,7 @@ export async function middleware(request) {
       );
     }
     
-    // Auth-Gate: Arahkan ke login dengan membawa jejak URL (callback) agar UX tidak rusak
+    // Auth-Gate: Arahkan ke login dengan membawa jejak URL
     if (isTransactionalRoute) {
       const callbackPath = encodeURIComponent(url.pathname + url.search);
       url.pathname = "/login";
@@ -81,7 +81,6 @@ export async function middleware(request) {
   return supabaseResponse;
 }
 
-// WAJIB ADA: Jika rute tidak didaftarkan di matcher, middleware tidak akan pernah mendeteksinya.
 export const config = {
   matcher: [
     "/api/:path*",

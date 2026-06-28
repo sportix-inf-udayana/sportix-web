@@ -12,13 +12,11 @@ export default function UmkmCatalogClient({ initialProducts }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
-  // Filter berjalan murni di memori klien berdasarkan data SSR yang dioper
   const filteredProducts = initialProducts.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const addToCart = (prod) => {
-    // Validasi stok instan di sisi UI (Backend tetap akan memvalidasi ulang nanti)
     const existing = cart.find(item => item.id === prod.id);
     if (existing) {
       if (existing.qty >= prod.stock) {
@@ -39,7 +37,6 @@ export default function UmkmCatalogClient({ initialProducts }) {
     setCart(cart.filter(item => item.id !== id));
   };
 
-  // Nilai ini HANYA untuk tampilan UI. Dilarang keras dikirim ke Backend sebagai sumber kebenaran (Source of Truth).
   const displayTotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
   const handleCheckout = async () => {
@@ -47,13 +44,11 @@ export default function UmkmCatalogClient({ initialProducts }) {
     setIsCheckingOut(true);
 
     try {
-      // ZERO-TRUST ARCHITECTURE: Hanya kirim ID dan Kuantitas
       const checkoutPayload = cart.map(item => ({
         productId: item.id,
         quantity: item.qty
       }));
 
-      // Panggilan API Nyata ke Payment Gateway
       const response = await fetch("/api/umkm/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -69,7 +64,6 @@ export default function UmkmCatalogClient({ initialProducts }) {
       if (window.snap) {
          window.snap.pay(data.snapToken, {
             onSuccess: () => { 
-              // Bersihkan state HANYA jika Midtrans memvalidasi pembayaran berhasil
               setCart([]); 
               setIsCartOpen(false); 
               router.push('/profile/history'); 
@@ -101,19 +95,19 @@ export default function UmkmCatalogClient({ initialProducts }) {
       {/* Search & Cart Trigger */}
       <div className="flex justify-between items-center mb-8 gap-4">
         <div className="relative max-w-sm flex-1">
-          <Search className="w-4 h-4 text-zinc-600 absolute left-3.5 top-3.5" />
+          <Search className="w-4 h-4 text-brand-slate absolute left-3.5 top-3.5" />
           <input
             type="text"
             placeholder="Cari peralatan lokal Bali..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-surface border border-zinc-800 focus:border-brand-emerald rounded-xl py-2.5 pl-10 pr-4 text-xs text-white placeholder-zinc-700 outline-none transition-all font-sans"
+            className="w-full bg-surface border border-brand-slate/20 focus:border-brand-emerald rounded-xl py-2.5 pl-10 pr-4 text-xs text-white placeholder-brand-slate outline-none transition-all font-sans"
           />
         </div>
 
         <button
           onClick={() => setIsCartOpen(!isCartOpen)}
-          className="bg-surface border border-zinc-800 hover:border-zinc-700 p-2.5 rounded-xl flex items-center gap-2 text-xs font-mono tracking-wider text-white cursor-pointer transition-colors"
+          className="bg-surface border border-brand-slate/20 hover:border-brand-slate/50 p-2.5 rounded-xl flex items-center gap-2 text-xs font-mono tracking-wider text-white cursor-pointer transition-colors"
         >
           <ShoppingBag className="w-4 h-4 text-brand-neon" />
           <span>CART ({cart.reduce((a, b) => a + b.qty, 0)})</span>
@@ -122,14 +116,14 @@ export default function UmkmCatalogClient({ initialProducts }) {
 
       {/* Products Grid */}
       {filteredProducts.length === 0 ? (
-        <div className="text-center py-20 border border-dashed border-zinc-800 rounded-xl text-zinc-500 font-mono text-sm">
+        <div className="text-center py-20 border border-dashed border-brand-slate/20 rounded-xl text-brand-slate font-mono text-sm">
           Katalog kosong atau produk tidak ditemukan.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {filteredProducts.map((p) => (
-            <div key={p.id} className="bg-surface-elevated border border-zinc-800/80 rounded-2xl overflow-hidden flex flex-col justify-between group hover:border-brand-emerald/50 transition-colors shadow-lg">
-              <div className="h-44 bg-zinc-950 overflow-hidden relative">
+            <div key={p.id} className="bg-surface-elevated border border-brand-slate/20 rounded-2xl overflow-hidden flex flex-col justify-between group hover:border-brand-emerald/50 transition-colors shadow-lg">
+              <div className="h-44 bg-surface overflow-hidden relative">
                 <Image
                   src={p.image}
                   alt={p.name}
@@ -138,25 +132,25 @@ export default function UmkmCatalogClient({ initialProducts }) {
                   unoptimized
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
-                <span className="absolute bottom-3 right-3 bg-black/80 backdrop-blur border border-zinc-800 text-micro font-mono px-2 py-0.5 rounded text-white">
+                <span className="absolute bottom-3 right-3 bg-black/80 backdrop-blur border border-brand-slate/20 text-micro font-mono px-2 py-0.5 rounded text-white">
                   Stock: {p.stock}
                 </span>
               </div>
               <div className="p-4 flex-1 flex flex-col justify-between">
                 <div>
                   <h4 className="text-sm font-bold text-white group-hover:text-brand-neon transition-colors font-display">{p.name}</h4>
-                  <p className="text-tiny text-zinc-400 leading-relaxed mt-1.5 mb-4 font-sans line-clamp-2">{p.desc}</p>
+                  <p className="text-tiny text-brand-slate leading-relaxed mt-1.5 mb-4 font-sans line-clamp-2">{p.desc}</p>
                 </div>
                 <div>
-                  <div className="flex justify-between items-center border-t border-zinc-800/60 pt-3 mt-auto">
+                  <div className="flex justify-between items-center border-t border-brand-slate/20 pt-3 mt-auto">
                     <div>
-                      <span className="text-micro font-mono text-zinc-500 block">HARGA RETAIL</span>
+                      <span className="text-micro font-mono text-brand-slate block">HARGA RETAIL</span>
                       <span className="text-xs font-mono font-bold text-brand-neon block mt-0.5">Rp {Number(p.price).toLocaleString("id-ID")}</span>
                     </div>
                     <button
                       onClick={() => addToCart(p)}
                       disabled={p.stock < 1}
-                      className="bg-zinc-800 hover:bg-brand-emerald hover:text-black border border-zinc-700 hover:border-transparent text-white font-mono text-micro font-bold px-3 py-2 rounded-lg transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="bg-surface border border-brand-slate/20 hover:bg-brand-emerald hover:text-black hover:border-transparent text-white font-mono text-micro font-bold px-3 py-2 rounded-lg transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {p.stock < 1 ? "HABIS" : "ADD TO CART"}
                     </button>
@@ -171,10 +165,10 @@ export default function UmkmCatalogClient({ initialProducts }) {
       {/* Cart Drawer Overlay */}
       {isCartOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-end animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-surface-elevated border-l border-zinc-800 h-full p-6 flex flex-col justify-between shadow-2xl relative slide-in-from-right-8">
+          <div className="w-full max-w-md bg-surface-elevated border-l border-brand-slate/20 h-full p-6 flex flex-col justify-between shadow-2xl relative slide-in-from-right-8">
             <button
               onClick={() => setIsCartOpen(false)}
-              className="absolute top-6 right-6 text-xs font-mono text-zinc-500 hover:text-white uppercase cursor-pointer"
+              className="absolute top-6 right-6 text-xs font-mono text-brand-slate hover:text-white uppercase cursor-pointer"
             >
               [X] CLOSE
             </button>
@@ -184,25 +178,25 @@ export default function UmkmCatalogClient({ initialProducts }) {
               </h3>
 
               {cart.length === 0 ? (
-                <div className="text-center py-12 text-zinc-600 font-mono text-xs border border-dashed border-zinc-800 rounded-lg">
+                <div className="text-center py-12 text-brand-slate font-mono text-xs border border-dashed border-brand-slate/20 rounded-lg">
                   Keranjang Anda masih kosong.
                 </div>
               ) : (
                 <div className="space-y-4 font-sans">
                   {cart.map((item) => (
-                    <div key={item.id} className="bg-surface border border-zinc-800 p-3.5 rounded-xl flex items-center justify-between gap-3 text-xs shadow-sm">
+                    <div key={item.id} className="bg-surface border border-brand-slate/20 p-3.5 rounded-xl flex items-center justify-between gap-3 text-xs shadow-sm">
                       <div className="flex-1">
                         <h5 className="font-bold text-white leading-none mb-1.5">{item.name}</h5>
                         <div className="flex items-center gap-2">
                           <span className="text-micro font-mono text-brand-neon font-bold">
                             Rp {Number(item.price).toLocaleString("id-ID")}
                           </span>
-                          <span className="text-micro font-mono text-zinc-500">x {item.qty}</span>
+                          <span className="text-micro font-mono text-brand-slate">x {item.qty}</span>
                         </div>
                       </div>
                       <button
                         onClick={() => removeFromCart(item.id)}
-                        className="text-zinc-600 hover:text-red-400 bg-zinc-900/50 hover:bg-red-500/10 p-2 rounded transition-colors cursor-pointer"
+                        className="text-brand-slate hover:text-red-400 bg-surface border border-brand-slate/20 p-2 rounded transition-colors cursor-pointer"
                         title="Hapus item"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -214,9 +208,9 @@ export default function UmkmCatalogClient({ initialProducts }) {
             </div>
 
             {cart.length > 0 && (
-              <div className="border-t border-zinc-800 pt-5 mt-4 space-y-4 bg-surface-elevated">
+              <div className="border-t border-brand-slate/20 pt-5 mt-4 space-y-4 bg-surface-elevated">
                 <div className="flex justify-between items-center text-xs font-mono">
-                  <span className="text-zinc-500 uppercase">ESTIMASI SUBTOTAL</span>
+                  <span className="text-brand-slate uppercase">ESTIMASI SUBTOTAL</span>
                   <span className="text-brand-neon font-bold text-base">Rp {displayTotal.toLocaleString("id-ID")}</span>
                 </div>
                 <div className="bg-brand-emerald/10 border border-brand-emerald/20 p-2.5 rounded text-micro font-mono text-brand-emerald flex items-center justify-center gap-2 uppercase">
