@@ -7,7 +7,7 @@ export default function HeroSection() {
     <div className="relative h-[420px] overflow-hidden flex items-end">
       <div className="absolute inset-0">
         <Image
-          src="/images/hero-arena.jpg"
+          src="/image/hero-arena.jpg"
           alt="Sportix Premium Arena"
           fill
           sizes="100vw"
@@ -25,7 +25,7 @@ export default function HeroSection() {
         <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-3 font-display">
           Exploration <span className="text-brand-emerald">Engine</span>
         </h1>
-        <p className="text-zinc-400 text-sm md:text-base max-w-2xl leading-relaxed">
+        <p className="text-brand-slate text-sm md:text-base max-w-2xl leading-relaxed">
           Sistem terintegrasi yang menarik data langsung dari master ledger. 100% Cashless, 100% Akuntabel.
         </p>
       </div>

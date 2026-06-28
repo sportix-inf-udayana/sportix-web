@@ -45,12 +45,10 @@ export default function PaymentDrawer({ isOpen, onClose, selectedDate, selectedS
         throw new Error(data.message || "Gagal mengunci slot atau ID Reservasi tidak valid.");
       }
 
-      // 2. Integrasi Midtrans Snap yang Benar (Menggunakan callback UI, bukan webhook manual)
-      // Catatan Arsitektur: Pastikan script Midtrans (snap.js) di-load di layout utama.
+      // 2. Integrasi Midtrans Snap
       if (typeof window !== "undefined" && window.snap) {
         window.snap.pay(data.reservationId, {
           onSuccess: function (result) {
-            // Callback ini HANYA untuk UI. Database di-update oleh webhook Midtrans di backend.
             setPaymentSuccess(true);
             setTicketDetails({ ticketId: data.reservationId, date: selectedDate, time: selectedSlot.time });
             setCheckoutLoading(false);
@@ -70,7 +68,6 @@ export default function PaymentDrawer({ isOpen, onClose, selectedDate, selectedS
           }
         });
       } else {
-        // Fallback untuk lingkungan simulasi jika snap.js tidak ada
         console.warn("Midtrans Snap.js tidak terdeteksi. Menjalankan simulasi antarmuka sukses.");
         setTimeout(() => {
           setPaymentSuccess(true);
@@ -87,16 +84,15 @@ export default function PaymentDrawer({ isOpen, onClose, selectedDate, selectedS
   };
 
   const navigateToHistory = () => {
-    // Menggunakan Router Next.js yang benar, bukan manipulasi DOM window.location
     router.push("/profile/history");
   };
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-end items-end md:items-stretch">
-      <div className="w-full md:max-w-md bg-surface-elevated border-t md:border-l border-zinc-800 h-auto md:h-full p-6 flex flex-col justify-between shadow-2xl relative animate-in slide-in-from-bottom md:slide-in-from-right duration-300">
+      <div className="w-full md:max-w-md bg-surface-elevated border-t md:border-l border-brand-slate/20 h-auto md:h-full p-6 flex flex-col justify-between shadow-2xl relative animate-in slide-in-from-bottom md:slide-in-from-right duration-300">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 rounded-full bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition-all cursor-pointer"
+          className="absolute top-4 right-4 p-1.5 rounded-full bg-surface border border-brand-slate/20 hover:border-brand-slate text-brand-slate hover:text-white transition-all cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
@@ -107,21 +103,21 @@ export default function PaymentDrawer({ isOpen, onClose, selectedDate, selectedS
               <CheckCircle className="w-8 h-8" />
             </div>
             <h3 className="text-xl font-bold text-white mb-2 font-display">Pemesanan Berhasil!</h3>
-            <p className="text-zinc-400 text-xs mb-6 font-sans">
+            <p className="text-brand-slate text-xs mb-6 font-sans">
               Pembayaran cashless terkonfirmasi oleh Payment Reconciliation Agent (PRA). Tiket Anda terbit dengan status aktif.
             </p>
 
-            <div className="bg-surface border border-zinc-800 p-4 rounded-lg w-full text-left space-y-3 font-mono text-xs mb-8">
+            <div className="bg-surface border border-brand-slate/20 p-4 rounded-lg w-full text-left space-y-3 font-mono text-xs mb-8">
               <div className="flex justify-between">
-                <span className="text-zinc-500">TICKET ID</span>
+                <span className="text-brand-slate">TICKET ID</span>
                 <span className="text-brand-neon font-bold">{ticketDetails?.ticketId}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">VENUE</span>
+                <span className="text-brand-slate">VENUE</span>
                 <span className="text-white">{venueName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">SLOT TIME</span>
+                <span className="text-brand-slate">SLOT TIME</span>
                 <span className="text-white">{ticketDetails?.date}, {ticketDetails?.time}</span>
               </div>
             </div>
@@ -136,28 +132,28 @@ export default function PaymentDrawer({ isOpen, onClose, selectedDate, selectedS
         ) : (
           <div className="flex-1 flex flex-col justify-between h-full pt-4">
             <div>
-              <span className="text-micro font-mono text-zinc-500 uppercase tracking-widest block mb-1">
+              <span className="text-micro font-mono text-brand-slate uppercase tracking-widest block mb-1">
                 CONFIRM RESERVATION
               </span>
               <h3 className="text-lg font-bold text-white mb-6 font-display">
                 Detail Pembayaran Cashless
               </h3>
 
-              <div className="space-y-4 mb-6 bg-surface p-4 rounded-lg border border-zinc-800/80 font-sans">
+              <div className="space-y-4 mb-6 bg-surface p-4 rounded-lg border border-brand-slate/20 font-sans">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-zinc-400">Lapangan</span>
+                  <span className="text-brand-slate">Lapangan</span>
                   <span className="font-bold text-white">{venueName} (Indoor Turf)</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-zinc-400">Tanggal</span>
+                  <span className="text-brand-slate">Tanggal</span>
                   <span className="font-mono text-white">{selectedDate}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-zinc-400">Jam Slot</span>
+                  <span className="text-brand-slate">Jam Slot</span>
                   <span className="font-mono text-brand-neon font-bold">{selectedSlot?.time}</span>
                 </div>
-                <div className="border-t border-zinc-800 my-2 pt-3 flex justify-between items-center">
-                  <span className="text-xs text-zinc-300 font-bold">TOTAL BAYAR</span>
+                <div className="border-t border-brand-slate/20 my-2 pt-3 flex justify-between items-center">
+                  <span className="text-xs text-brand-slate font-bold">TOTAL BAYAR</span>
                   <span className="font-mono text-base font-bold text-brand-neon">
                     IDR {(selectedSlot?.price || 150000).toLocaleString("id-ID")}
                   </span>
@@ -165,21 +161,21 @@ export default function PaymentDrawer({ isOpen, onClose, selectedDate, selectedS
               </div>
 
               <div className="mb-6">
-                <label className="text-micro font-mono text-zinc-500 uppercase block mb-2">
+                <label className="text-micro font-mono text-brand-slate uppercase block mb-2">
                   SISTEM CASHLESS (DIGITAL-ONLY)
                 </label>
-                <div className="bg-surface border border-zinc-800 rounded-lg p-3 flex items-center gap-3">
+                <div className="bg-surface border border-brand-slate/20 rounded-lg p-3 flex items-center gap-3">
                   <div className="w-8 h-8 rounded bg-brand-amber/10 border border-brand-amber/20 flex items-center justify-center text-brand-amber shadow-[0_0_20px_rgba(245,158,11,0.15)]">
                     <CreditCard className="w-4 h-4" />
                   </div>
                   <div className="text-left flex-1 font-sans">
                     <h5 className="text-xs font-bold text-white leading-none mb-1">Sportix Instant Gateway</h5>
-                    <p className="text-micro text-zinc-500">Automatic reconciliation engine active</p>
+                    <p className="text-micro text-brand-slate">Automatic reconciliation engine active</p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-start gap-2.5 bg-amber-950/20 border border-amber-500/20 p-3 rounded-lg mb-6">
+              <div className="flex items-start gap-2.5 bg-brand-amber/10 border border-brand-amber/20 p-3 rounded-lg mb-6">
                 <input
                   id="forfeit-checkbox"
                   type="checkbox"
@@ -187,7 +183,7 @@ export default function PaymentDrawer({ isOpen, onClose, selectedDate, selectedS
                   onChange={(e) => setAgreedToForfeit(e.target.checked)}
                   className="mt-0.5 accent-brand-emerald w-4 h-4 rounded cursor-pointer shrink-0"
                 />
-                <label htmlFor="forfeit-checkbox" className="text-micro text-zinc-400 leading-normal cursor-pointer select-none font-sans">
+                <label htmlFor="forfeit-checkbox" className="text-micro text-brand-slate leading-normal cursor-pointer select-none font-sans">
                   Saya menyetujui <span className="text-brand-amber font-bold">Kebijakan Forfeit 100% Dana</span> apabila terlambat masuk bermain melebihi <span className="text-brand-amber font-bold">&gt;15 menit</span>.
                 </label>
               </div>

@@ -22,9 +22,10 @@ module.exports = {
           card: "rgba(24, 24, 27, 0.85)",
         },
         brand: {
-          emerald: "#10b981",
-          neon: "#4edea3",
-          amber: "#f59e0b",
+          emerald: "#10b981", // Tersedia sebagai bg-brand-emerald
+          neon: "#4edea3",    // Tersedia sebagai bg-brand-neon
+          amber: "#f59e0b",   // Tersedia sebagai bg-brand-amber
+          slate: "#64748b",   // Standarisasi untuk abu-abu
         }
       },
       fontSize: {
