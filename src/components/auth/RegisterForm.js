@@ -3,19 +3,20 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
-import { Loader2, Shield, User, Mail, Lock } from "lucide-react";
+import { Loader2, Shield, User, Mail, Lock, Eye, EyeOff } from "lucide-react";
 
 export default function RegisterForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
     password: "",
-    role: "CUSTOMER", // Otorisasi default sistem
+    role: "CUSTOMER",
   });
 
   const supabase = createBrowserClient(
@@ -36,14 +37,13 @@ export default function RegisterForm() {
     setError(null);
 
     try {
-      // Menyuntikkan user baru ke Supabase Auth Server beserta metadata RBAC
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
           data: {
             full_name: formData.fullName,
-            role: formData.role, // Disimpan dalam metadata untuk dievaluasi oleh middleware.js
+            role: formData.role, 
           },
         },
       });
@@ -51,6 +51,8 @@ export default function RegisterForm() {
       if (signUpError) throw signUpError;
 
       if (data?.user) {
+        // FIX: Hancurkan session instan untuk mematikan auto-login
+        await supabase.auth.signOut();
         setSuccess(true);
         setTimeout(() => {
           router.push("/login");
@@ -58,7 +60,6 @@ export default function RegisterForm() {
       }
     } catch (err) {
       console.error("Registration engine fault:", err);
-      // Mengekstrak properti pesan secara agresif dari objek error Supabase
       const errorMessage = err?.message || err?.error_description || err?.msg || "Terjadi kegagalan sistem yang tidak diketahui.";
       setError(errorMessage);
     } finally {
@@ -87,69 +88,51 @@ export default function RegisterForm() {
         </div>
       )}
 
-      {/* Input Nama Lengkap */}
       <div className="space-y-1.5">
         <label className="text-xs font-mono font-bold tracking-wider text-brand-slate uppercase">Nama Lengkap</label>
         <div className="relative">
           <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-          <input
-            type="text"
-            name="fullName"
-            required
-            value={formData.fullName}
-            onChange={handleChange}
-            placeholder="Masukkan identitas lengkap"
-            className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors"
-          />
+          <input type="text" name="fullName" required value={formData.fullName} onChange={handleChange} placeholder="Masukkan identitas lengkap" className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors" />
         </div>
       </div>
 
-      {/* Input Email */}
       <div className="space-y-1.5">
         <label className="text-xs font-mono font-bold tracking-wider text-brand-slate uppercase">Alamat Email</label>
         <div className="relative">
           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-          <input
-            type="email"
-            name="email"
-            required
-            value={formData.email}
-            onChange={handleChange}
-            placeholder="nama@domain.com"
-            className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors"
-          />
+          <input type="email" name="email" required value={formData.email} onChange={handleChange} placeholder="nama@domain.com" className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors" />
         </div>
       </div>
 
-      {/* Input Password */}
       <div className="space-y-1.5">
         <label className="text-xs font-mono font-bold tracking-wider text-brand-slate uppercase">Password</label>
         <div className="relative">
           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-          <input
-            type="password"
-            name="password"
-            required
-            minLength={6}
-            value={formData.password}
-            onChange={handleChange}
-            placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
-            className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors"
+          <input 
+            type={showPassword ? "text" : "password"} 
+            name="password" 
+            required 
+            minLength={6} 
+            value={formData.password} 
+            onChange={handleChange} 
+            placeholder="••••••••" 
+            className="w-full pl-10 pr-12 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors" 
           />
+          <button 
+            type="button" 
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-brand-emerald transition-colors cursor-pointer"
+          >
+            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
         </div>
       </div>
 
-      {/* Pilihan Multi-Role */}
       <div className="space-y-1.5">
         <label className="text-xs font-mono font-bold tracking-wider text-brand-slate uppercase">Klasifikasi Akun</label>
         <div className="relative">
           <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-          <select
-            name="role"
-            value={formData.role}
-            onChange={handleChange}
-            className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors appearance-none font-sans"
-          >
+          <select name="role" value={formData.role} onChange={handleChange} className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors appearance-none font-sans">
             <option value="CUSTOMER">Pelanggan (Customer)</option>
             <option value="ADMIN_VENUE">Operator Lapangan (Admin Venue)</option>
             <option value="UMKM_SELLER">Mitra Merchant (UMKM Seller)</option>
@@ -158,12 +141,7 @@ export default function RegisterForm() {
         </div>
       </div>
 
-      {/* Tombol Eksekusi */}
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full py-3 bg-brand-emerald text-background font-mono text-sm font-bold rounded-lg hover:bg-brand-emerald/90 transition-colors flex items-center justify-center gap-2"
-      >
+      <button type="submit" disabled={loading} className="w-full py-3 bg-brand-emerald text-background font-mono text-sm font-bold rounded-lg hover:bg-brand-emerald/90 transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50">
         {loading ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />

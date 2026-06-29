@@ -5,15 +5,17 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ShoppingBag, Search, Trash2, ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 
-export default function UmkmCatalogClient({ initialProducts }) {
+export default function UmkmCatalogClient({ initialProducts = [] }) {
   const router = useRouter();
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
-  const filteredProducts = initialProducts.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
+  // DEFENSIVE FIX: Pastikan initialProducts selalu berupa array sebelum di-filter
+  const safeProducts = Array.isArray(initialProducts) ? initialProducts : [];
+  const filteredProducts = safeProducts.filter(p =>
+    p?.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const addToCart = (prod) => {
@@ -92,7 +94,6 @@ export default function UmkmCatalogClient({ initialProducts }) {
 
   return (
     <>
-      {/* Search & Cart Trigger */}
       <div className="flex justify-between items-center mb-8 gap-4">
         <div className="relative max-w-sm flex-1">
           <Search className="w-4 h-4 text-brand-slate absolute left-3.5 top-3.5" />
@@ -114,7 +115,6 @@ export default function UmkmCatalogClient({ initialProducts }) {
         </button>
       </div>
 
-      {/* Products Grid */}
       {filteredProducts.length === 0 ? (
         <div className="text-center py-20 border border-dashed border-brand-slate/20 rounded-xl text-brand-slate font-mono text-sm">
           Katalog kosong atau produk tidak ditemukan.
@@ -145,7 +145,7 @@ export default function UmkmCatalogClient({ initialProducts }) {
                   <div className="flex justify-between items-center border-t border-brand-slate/20 pt-3 mt-auto">
                     <div>
                       <span className="text-micro font-mono text-brand-slate block">HARGA RETAIL</span>
-                      <span className="text-xs font-mono font-bold text-brand-neon block mt-0.5">Rp {Number(p.price).toLocaleString("id-ID")}</span>
+                      <span className="text-xs font-mono font-bold text-brand-neon block mt-0.5">Rp {Number(p.price || 0).toLocaleString("id-ID")}</span>
                     </div>
                     <button
                       onClick={() => addToCart(p)}
@@ -162,7 +162,6 @@ export default function UmkmCatalogClient({ initialProducts }) {
         </div>
       )}
 
-      {/* Cart Drawer Overlay */}
       {isCartOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-end animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-surface-elevated border-l border-brand-slate/20 h-full p-6 flex flex-col justify-between shadow-2xl relative slide-in-from-right-8">
@@ -189,7 +188,7 @@ export default function UmkmCatalogClient({ initialProducts }) {
                         <h5 className="font-bold text-white leading-none mb-1.5">{item.name}</h5>
                         <div className="flex items-center gap-2">
                           <span className="text-micro font-mono text-brand-neon font-bold">
-                            Rp {Number(item.price).toLocaleString("id-ID")}
+                            Rp {Number(item.price || 0).toLocaleString("id-ID")}
                           </span>
                           <span className="text-micro font-mono text-brand-slate">x {item.qty}</span>
                         </div>

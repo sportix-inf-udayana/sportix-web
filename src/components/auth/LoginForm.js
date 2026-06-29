@@ -3,17 +3,16 @@
 import React, { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff } from "lucide-react";
 
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
-  // Tangkap jejak rute dari middleware
   const callbackUrl = searchParams.get("callback");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -40,14 +39,12 @@ export default function LoginForm() {
 
       if (signInError) throw signInError;
 
-      // Prioritaskan Callback URL jika ada 
       if (callbackUrl) {
         router.push(callbackUrl);
         return; 
       }
 
-      // Jika tidak ada callback, gunakan routing bawaan berbasis Role
-      const userRole = data.user.user_metadata?.role;
+      const userRole = data.user.user_metadata?.role || "CUSTOMER";
       switch (userRole) {
         case "SUPER_ADMIN":
           router.push("/super-admin/verifications");
@@ -64,6 +61,8 @@ export default function LoginForm() {
         default:
           router.push("/");
       }
+      
+      router.refresh();
 
     } catch (err) {
       setError("Kredensial tidak valid. Akses basis data ditolak.");
@@ -93,7 +92,23 @@ export default function LoginForm() {
 
         <div className="space-y-2">
           <label className="text-micro font-bold text-zinc-500 uppercase tracking-widest font-mono">Password</label>
-          <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-xs text-foreground outline-none focus:border-brand-emerald transition-colors font-mono" />
+          <div className="relative">
+            <input 
+              type={showPassword ? "text" : "password"} 
+              required 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+              placeholder="••••••••" 
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-4 pr-12 py-3 text-xs text-foreground outline-none focus:border-brand-emerald transition-colors font-mono" 
+            />
+            <button 
+              type="button" 
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-brand-emerald transition-colors cursor-pointer"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
 
         <button type="submit" disabled={loading} className="w-full bg-brand-emerald hover:bg-brand-emerald/90 text-black font-black py-4 rounded-xl transition-all glow-emerald flex items-center justify-center gap-2 uppercase tracking-tight cursor-pointer disabled:opacity-50">

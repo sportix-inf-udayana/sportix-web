@@ -4,12 +4,14 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, Lock, Unlock, AlertTriangle } from "lucide-react";
 
-export default function SlotMatrixClient({ initialSlots, currentDate, venueId }) {
+export default function SlotMatrixClient({ initialSlots = [], currentDate, venueId }) {
   const router = useRouter();
   const [selectedAuditSlot, setSelectedAuditSlot] = useState(null);
   const [processingId, setProcessingId] = useState(null);
 
-  // Fungsi untuk mengeksekusi perubahan status ke backend
+  // DEFENSIVE FIX
+  const safeSlots = Array.isArray(initialSlots) ? initialSlots : [];
+
   const handleStateMutation = async (slotId, targetState, expectedCurrentState) => {
     setProcessingId(slotId);
     try {
@@ -43,7 +45,6 @@ export default function SlotMatrixClient({ initialSlots, currentDate, venueId })
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-      {/* Timeline Matrix list (8 columns) */}
       <div className="lg:col-span-8 bg-surface border border-brand-slate/20 rounded-xl p-6">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xs font-mono text-brand-slate uppercase tracking-wider">
@@ -54,13 +55,13 @@ export default function SlotMatrixClient({ initialSlots, currentDate, venueId })
           </span>
         </div>
 
-        {initialSlots.length === 0 ? (
+        {safeSlots.length === 0 ? (
           <div className="text-center py-12 border border-brand-slate/20 border-dashed rounded-lg text-brand-slate font-mono text-xs">
             Tidak ada data slot yang dibuat untuk tanggal ini.
           </div>
         ) : (
           <div className="space-y-3">
-            {initialSlots.map((s) => {
+            {safeSlots.map((s) => {
               const isProcessing = processingId === s.id;
               
               const activeReservation = s.reservations?.find(r => r.status === 'CONFIRMED' || r.status === 'PENDING');
@@ -75,7 +76,7 @@ export default function SlotMatrixClient({ initialSlots, currentDate, venueId })
                 >
                   <div className="flex items-center gap-4">
                     <span className="font-mono text-base font-bold text-white w-14">
-                      {s.time.substring(0, 5)}
+                      {s.time?.substring(0, 5) || "00:00"}
                     </span>
                     <div className="flex items-center gap-2">
                       <span className={`w-2.5 h-2.5 rounded-full ${
@@ -89,7 +90,6 @@ export default function SlotMatrixClient({ initialSlots, currentDate, venueId })
                   </div>
 
                   <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
-                    {/* View booked info */}
                     {s.status === "BOOKED" && (
                       <button
                         onClick={() => setSelectedAuditSlot({ ...s, customer: customerName, payment: activeReservation?.payment_gateway_ref, phone: activeReservation?.users?.phone })}
@@ -101,7 +101,6 @@ export default function SlotMatrixClient({ initialSlots, currentDate, venueId })
                       </button>
                     )}
 
-                    {/* Operational control buttons */}
                     {s.status === "AVAILABLE" && (
                       <button
                         onClick={() => handleStateMutation(s.id, "LOCKED", "AVAILABLE")}
@@ -131,7 +130,6 @@ export default function SlotMatrixClient({ initialSlots, currentDate, venueId })
         )}
       </div>
 
-      {/* Audit sidebar (4 columns) */}
       <div className="lg:col-span-4 space-y-6">
         <div className="bg-surface border border-brand-slate/20 rounded-xl p-6 sticky top-24">
           <h3 className="text-xs font-mono text-brand-slate uppercase tracking-wider mb-4">
@@ -143,7 +141,7 @@ export default function SlotMatrixClient({ initialSlots, currentDate, venueId })
               <div className="bg-surface-elevated border border-brand-slate/20 p-4 rounded-lg font-mono text-xs space-y-3">
                 <div className="flex justify-between flex-col gap-1">
                   <span className="text-brand-slate">TIME SLOT</span>
-                  <span className="text-brand-neon font-bold text-sm">{selectedAuditSlot.time.substring(0, 5)}</span>
+                  <span className="text-brand-neon font-bold text-sm">{selectedAuditSlot.time?.substring(0, 5) || "00:00"}</span>
                 </div>
                 <div className="flex justify-between flex-col gap-1">
                   <span className="text-brand-slate">ATHLETE / USER</span>
