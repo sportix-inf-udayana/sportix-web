@@ -19,7 +19,6 @@ export default async function CoachWalletPage() {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return <div className="p-8 text-red-500 font-mono text-center">Akses Ditolak.</div>;
 
-  // Eksekusi Data Layer Terpusat
   const { availableBalance, pendingBalance, ledgerHistory } = await getCoachWalletData(supabase, user.id);
 
   return (
@@ -39,27 +38,26 @@ export default async function CoachWalletPage() {
           <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
               <span className="text-xs font-mono text-zinc-400 uppercase tracking-widest block mb-2">SALDO TERSEDIA</span>
+              {/* DEFENSIVE FIX: Number casting */}
               <div className="text-4xl md:text-5xl font-black text-white font-display tracking-tight">
-                Rp {availableBalance.toLocaleString("id-ID")}
+                Rp {Number(availableBalance || 0).toLocaleString("id-ID")}
               </div>
               <div className="mt-3 text-xs font-mono text-zinc-500">
-                Tertunda (Menunggu Penyelesaian SLA): <span className="text-brand-amber font-bold">Rp {pendingBalance.toLocaleString("id-ID")}</span>
+                Tertunda (Menunggu Penyelesaian SLA): <span className="text-brand-amber font-bold">Rp {Number(pendingBalance || 0).toLocaleString("id-ID")}</span>
               </div>
             </div>
-            {/* Tombol Interaktif di Client Component */}
             <WithdrawalClientWrapper maxBalance={availableBalance} />
           </div>
         </div>
       </div>
 
-      {/* Tabel Mutasi Buku Besar (Server Rendered untuk keamanan & kecepatan) */}
       <div className="bg-surface border border-zinc-800 rounded-2xl overflow-hidden">
         <div className="p-6 border-b border-zinc-800 flex items-center gap-2 bg-surface-elevated">
           <History className="w-5 h-5 text-zinc-400" />
           <h3 className="font-bold text-white font-display">Mutasi Buku Besar (Double-Entry Log)</h3>
         </div>
         
-        {ledgerHistory.length > 0 ? (
+        {ledgerHistory && ledgerHistory.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-zinc-400">
               <thead className="bg-zinc-900/50 font-mono text-xs uppercase border-b border-zinc-800">
@@ -86,7 +84,7 @@ export default async function CoachWalletPage() {
                         log.transaction_type === 'CREDIT' ? 'text-brand-emerald' : 'text-red-400'
                       }`}>
                         {log.transaction_type === 'CREDIT' ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
-                        {log.amount.toLocaleString("id-ID")}
+                        {Number(log.amount || 0).toLocaleString("id-ID")}
                       </div>
                     </td>
                   </tr>

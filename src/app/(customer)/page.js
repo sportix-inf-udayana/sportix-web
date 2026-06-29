@@ -1,6 +1,7 @@
 import React from "react";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { redirect } from "next/navigation";
 
 import { getVerifiedVenues } from "../../lib/services/venue.service";
 import HeroSection from "../../components/customer/HeroSection";
@@ -17,7 +18,16 @@ export default async function CustomerMarketplacePage() {
     { cookies: { getAll() { return cookieStore.getAll(); } } }
   );
 
-  const activeVenues = await getVerifiedVenues(supabase);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    const role = user.user_metadata?.role;
+    if (role === "SUPER_ADMIN") redirect("/super-admin/verifications");
+    if (role === "ADMIN_VENUE") redirect("/admin-venue/slots");
+    if (role === "COACH") redirect("/coach/schedule");
+    if (role === "UMKM_SELLER") redirect("/seller-umkm/products");
+  }
+
+  const activeVenues = await getVerifiedVenues(supabase) || [];
 
   return (
     <div className="pb-16">
