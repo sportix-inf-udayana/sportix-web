@@ -37,7 +37,7 @@ export default function CustomerHeader({ user }) {
           </Link>
           
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-brand-slate">
-            <Link href="/" className="hover:text-white transition-colors">Aktivitas</Link>
+            <Link href="/" className="hover:text-white transition-colors">Home</Link>
             <Link href="/umkm" className="flex items-center gap-1.5 hover:text-white transition-colors">
               <ShoppingBag className="w-4 h-4" />
               <span>Merchandise</span>
