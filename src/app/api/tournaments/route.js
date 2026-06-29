@@ -7,7 +7,7 @@ export async function POST(req) {
     const supabase = getSupabase();
     if (!supabase) throw new Error("Database offline.");
 
-    // 1. Otorisasi Pengguna
+    // Otorisasi Pengguna
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -22,7 +22,7 @@ export async function POST(req) {
       return new NextResponse(JSON.stringify({ error: "Payload registrasi turnamen tidak lengkap." }), { status: 400 });
     }
 
-    // 2. Validasi Kuota (Race Condition Guard)
+    // Validasi Kuota (Race Condition Guard)
     // Ambil data turnamen beserta jumlah pendaftar yang sudah CONFIRMED/PAID
     const { data: tournament, error: tourneyErr } = await supabase
       .from('tournaments')
@@ -49,7 +49,7 @@ export async function POST(req) {
       }), { status: 409 });
     }
 
-    // 3. Injeksi Transaksi Registrasi
+    // Injeksi Transaksi Registrasi
     const { data: registration, error: regErr } = await supabase
       .from('tournament_registrations')
       .insert({
@@ -65,7 +65,7 @@ export async function POST(req) {
 
     if (regErr) throw regErr;
 
-    // 4. Injeksi Roster Pemain secara Massal (Bulk Insert)
+    // Injeksi Roster Pemain secara Massal (Bulk Insert)
     const rosterPayload = players.map(player => ({
       registration_id: registration.id,
       player_name: player.name.trim(),
@@ -81,9 +81,8 @@ export async function POST(req) {
       await supabase.from('tournament_registrations').delete().eq('id', registration.id);
       throw rosterErr;
     }
-
-    // 5. SOLUSI KONTRADIKSI TIPE DATA UUID vs STRING PREFIX
-    // Berikan Order ID khusus untuk Midtrans dengan merangkai prefix TRN- ke UUID
+    
+    // Buat Order ID untuk Midtrans
     const midtransOrderId = `TRN-${registration.id}`;
 
     return NextResponse.json({

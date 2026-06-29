@@ -1,6 +1,4 @@
 import React from "react";
-// Jika Anda punya komponen klien untuk report, import di sini. 
-// Jika belum, ini adalah kerangka dasarnya.
 
 export const dynamic = 'force-dynamic';
 

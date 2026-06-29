@@ -6,7 +6,7 @@ export async function PATCH(req) {
     const supabase = getSupabase();
     if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
 
-    // 1. Verifikasi Identitas JWT
+    // Verifikasi Identitas JWT
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -22,7 +22,7 @@ export async function PATCH(req) {
       return NextResponse.json({ success: false, message: "Payload instruksi tidak lengkap." }, { status: 400 });
     }
 
-    // 2. Tarik Data Slot & Validasi Kepemilikan Venue Mutlak
+    // Tarik Data Slot & Validasi Kepemilikan Venue Mutlak
     const { data: slotInfo, error: slotErr } = await supabase
       .from("slots")
       .select("id, status, venue_id, venues(owner_id)")
@@ -38,8 +38,7 @@ export async function PATCH(req) {
       return NextResponse.json({ success: false, message: "Forbidden. Akses properti ilegal." }, { status: 403 });
     }
 
-    // 3. Atomicity Guard: Cegah Race Condition
-    // Pastikan status di database masih sesuai dengan yang dilihat admin di layar
+    // Atomicity Guard: Cegah Race Condition
     if (expectedCurrentState && slotInfo.status !== expectedCurrentState) {
       return NextResponse.json({ 
         success: false, 
@@ -47,11 +46,9 @@ export async function PATCH(req) {
       }, { status: 409 });
     }
 
-    // 4. Eksekusi Perubahan Status
+    // Eksekusi Perubahan Status
     const updatePayload = { status: targetState };
     
-    // Jika dikunci manual oleh admin, berikan waktu lock tak terhingga sampai dirilis, 
-    // atau gunakan mekanisme lock standar 15 menit jika Anda ingin SLA tetap berlaku.
     if (targetState === 'AVAILABLE') {
       updatePayload.locked_until = null;
     }

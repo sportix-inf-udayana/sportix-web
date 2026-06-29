@@ -6,7 +6,7 @@ export async function POST(req) {
     const supabase = getSupabase();
     if (!supabase) throw new Error("Database offline.");
 
-    // 1. Verifikasi Kriptografi Lapis 2
+    // Verifikasi Kriptografi Lapis 2
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -24,7 +24,7 @@ export async function POST(req) {
       return new NextResponse(JSON.stringify({ error: "Payload tidak valid." }), { status: 400 });
     }
 
-    // 2. Ambil data pengajuan penarikan
+    // Ambil data pengajuan penarikan
     const { data: withdrawal, error: fetchErr } = await supabase
       .from('withdrawal_logs')
       .select('*')
@@ -45,11 +45,9 @@ export async function POST(req) {
       return NextResponse.json({ success: true, message: "Penarikan ditolak." });
     }
 
-    // 3. LOGIKA INTI: APPROVAL & DOUBLE-ENTRY LEDGER ENFORCEMENT
+    // LOGIKA INTI: APPROVAL & DOUBLE-ENTRY LEDGER ENFORCEMENT
     // Jika disetujui, JANGAN mengubah saldo tabel 'balances' secara manual!
     // Suntikkan ke ledger, biarkan PostgreSQL Trigger yang bekerja secara presisi (Imutabilitas Data Finansial).
-    
-    // Gunakan transaksi asinkron (RPC jika ada, atau sekuensial ketat)
     const { error: updateErr } = await supabase
       .from('withdrawal_logs')
       .update({ status: 'APPROVED', resolved_by: user.id })
@@ -69,8 +67,6 @@ export async function POST(req) {
       });
 
     if (ledgerErr) {
-      // Peringatan Keras: Ini adalah kondisi fatal (Data Inconsistency)
-      // Dalam skenario dunia nyata yang Anda rancang, tim Engineer harus dihubungi seketika.
       console.error("FATAL: Ledger insertion failed after withdrawal approval!", ledgerErr);
       throw ledgerErr;
     }

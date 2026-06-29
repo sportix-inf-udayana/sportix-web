@@ -6,7 +6,7 @@ export async function POST(req) {
     const supabase = getSupabase();
     if (!supabase) return new Response("Service Unavailable", { status: 503 });
 
-    // 1. Otorisasi Mutlak: Harus login sebagai Admin Venue
+    // Otorisasi Mutlak: Harus login sebagai Admin Venue
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return new Response("Unauthorized", { status: 401 });
 
@@ -22,7 +22,7 @@ export async function POST(req) {
       return new Response(JSON.stringify({ success: false, message: "Barcode token hilang." }), { status: 400 });
     }
 
-    // 2. Tarik data reservasi secara rinci untuk kalkulasi waktu lokal
+    // Tarik data reservasi secara rinci untuk kalkulasi waktu lokal
     const { data: reservation, error: resErr } = await supabase
       .from("reservations")
       .select("id, status, booking_date, start_time, field_id, user_id, fields(venue_id)")
@@ -33,7 +33,7 @@ export async function POST(req) {
       return new Response(JSON.stringify({ success: false, message: "Tiket tidak ditemukan atau barcode tidak valid." }), { status: 404 });
     }
 
-    // 3. Validasi Kepemilikan Venue Mutlak
+    // Validasi Kepemilikan Venue Mutlak
     const venueId = reservation.fields?.venue_id;
     const { data: venueOwnership } = await supabase
       .from("venues")
@@ -46,7 +46,7 @@ export async function POST(req) {
       return new Response(JSON.stringify({ success: false, message: "Akses ditolak. Tiket ini bukan untuk Venue Anda." }), { status: 403 });
     }
 
-    // 4. FAIL-SAFE GUARD: Penegakan Disiplin Waktu (Strict Forfeit Policy 15 Menit)
+    // FAIL-SAFE GUARD: Penegakan Disiplin Waktu (Strict Forfeit Policy 15 Menit)
     // Jika tiket masih CONFIRMED, pastikan admin tidak men-scan tiket yang sudah telat lewat 15 menit
     if (reservation.status === 'CONFIRMED') {
       const reservationDateTimeWITA = new Date(`${reservation.booking_date}T${reservation.start_time}+08:00`); // WITA = UTC+8
@@ -55,7 +55,7 @@ export async function POST(req) {
       const diffInMinutes = (currentDateTimeWITA - reservationDateTimeWITA) / 60000;
 
       if (diffInMinutes > 15) {
-        // Cronjob gagal/terlambat. Kita eksekusi FORFEIT secara manual di sini!
+        // Cronjob gagal/terlambat
         await supabase.from("reservations").update({ status: "FORFEITED" }).eq("id", reservation.id);
         await supabase.from("slots").update({ status: "AVAILABLE" }).eq("id", reservation.field_id);
         
@@ -71,7 +71,7 @@ export async function POST(req) {
       }), { status: 400 });
     }
 
-    // 5. Eksekusi Check-In & Penutupan Transaksi (Sesuai Flowchart Bab 2.5)
+    // Eksekusi Check-In & Penutupan Transaksi (Sesuai Flowchart Bab 2.5)
     const { error: updateErr } = await supabase
       .from("reservations")
       .update({ status: "COMPLETED", verified_by: user.id })

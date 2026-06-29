@@ -70,7 +70,7 @@ export default async function TournamentsHubPage() {
         {tournaments && tournaments.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {tournaments.map((t) => {
-              // Format tanggal dengan presisi
+              // Format tanggal 
               const dateObj = new Date(t.tournament_date);
               const formattedDate = dateObj.toLocaleDateString('id-ID', {
                 weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'

@@ -1,6 +1,6 @@
 export async function getUmkmStoreAndProducts(supabase, userId) {
   try {
-    // 1. Ambil data toko
+    // Ambil data toko
     const { data: store, error: storeError } = await supabase
       .from("umkm_stores")
       .select("id, name, status, venues(name)")
@@ -10,7 +10,7 @@ export async function getUmkmStoreAndProducts(supabase, userId) {
     if (storeError) throw storeError;
     if (!store) return { data: { store: null, products: [] }, error: null };
 
-    // 2. Ambil produk berdasarkan store_id
+    // Ambil produk berdasarkan store_id
     const { data: products, error: productsError } = await supabase
       .from("umkm_products")
       .select("*")
@@ -31,7 +31,7 @@ export async function getUmkmStoreAndProducts(supabase, userId) {
 
 export async function getUmkmOrders(supabase, userId) {
   try {
-    // 1. Ambil data toko
+    // Ambil data toko
     const { data: store, error: storeError } = await supabase
       .from("umkm_stores")
       .select("id")
@@ -41,7 +41,7 @@ export async function getUmkmOrders(supabase, userId) {
     if (storeError) throw storeError;
     if (!store) return { data: { store: null, orders: [] }, error: null };
 
-    // 2. Ambil pesanan toko
+    // Ambil pesanan toko
     const { data: orders, error: ordersError } = await supabase
       .from("umkm_orders")
       .select(`

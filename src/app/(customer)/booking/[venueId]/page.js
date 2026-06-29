@@ -18,7 +18,7 @@ export default async function BookingPage({ params }) {
     { cookies: { getAll() { return cookieStore.getAll(); } } }
   );
 
-  // 1. Validasi Sesi: Jika belum login, tendang ke gerbang login dengan parameter callback
+  // Validasi Sesi
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     redirect(`/login?callback=/booking/${venueId}`);
@@ -39,8 +39,7 @@ export default async function BookingPage({ params }) {
     );
   }
 
-  // 4. Render murni komponen klien
-  // Header dan Footer SUDAH OTOMATIS di-render oleh src/app/(customer)/layout.js
+  // Render komponen klien
   return (
     <div className="w-full">
       <BookingClient venue={venueData} user={user} />
