@@ -17,18 +17,18 @@ export default async function CustomerLayout({ children }) {
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    // Penambahan `min-h-screen` dan `flex flex-col` memaksa Footer selalu berada di paling bawah layar
+    // Footer dan Header global customer
     <div className="min-h-screen flex flex-col bg-background text-foreground font-sans">
       
-      {/* 1. Navigasi Global (Atas) */}
+      {/* Navigasi Global (Atas) */}
       <CustomerHeader user={user} />
       
-      {/* 2. Area Render Konten (Fleksibel mengisi ruang kosong) */}
+      {/* Area Render Konten */}
       <main className="flex-1">
         {children}
       </main>
 
-      {/* 3. Footer Global (Bawah) */}
+      {/* Footer Global (Bawah) */}
       <CustomerFooter />
       
     </div>

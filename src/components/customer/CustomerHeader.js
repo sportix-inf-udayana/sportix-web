@@ -16,13 +16,13 @@ export default function CustomerHeader({ user }) {
   );
 
   const handleLogout = async () => {
-    // 1. Hancurkan token JWT di cookie browser dan server session table
+    // Hancurkan token JWT di cookie browser dan server session table
     await supabase.auth.signOut();
     
-    // 2. Paksa Server Component untuk mengevaluasi ulang tata letak (Layout)
+    // Paksa Server Component untuk mengevaluasi ulang tata letak (Layout)
     router.refresh();
     
-    // 3. Kembalikan pengguna ke beranda publik dengan state bersih
+    // Kembalikan pengguna ke beranda publik dengan state bersih
     router.push("/");
   };
 

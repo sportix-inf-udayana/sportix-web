@@ -30,7 +30,7 @@ export async function middleware(request) {
   // Rute Transaksional yang HARUS diproteksi ketat
   const isTransactionalRoute = url.pathname.startsWith("/checkout") || url.pathname.startsWith("/booking");
 
-  // 1. Blokir Akses Tanpa Otentikasi
+  // Blokir Akses Tanpa Otentikasi
   if (!user && !isPublicWebhook) {
     if (isApiRoute) {
       return new NextResponse(
@@ -58,7 +58,7 @@ export async function middleware(request) {
     }
   }
 
-  // 2. RBAC (Role-Based Access Control)
+  // RBAC (Role-Based Access Control)
   if (user) {
     const role = user.user_metadata?.role || 'CUSTOMER';
 

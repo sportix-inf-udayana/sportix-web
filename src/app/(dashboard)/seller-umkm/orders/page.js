@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { Truck, MapPin, PackageOpen } from "lucide-react";
 
-// Path relatif murni sesuai arsitektur Clean Code
 import { getUmkmOrders } from "../../../../lib/services/umkm.service";
 import UmkmHeader from "../../../../components/umkm/UmkmHeader";
 import ShipmentDispatcherClient from "../../../../components/umkm/ShipmentDispatcherClient";

@@ -7,7 +7,7 @@ export async function POST(req) {
     const supabase = getSupabase();
     if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
 
-    // 1. Otorisasi Pengguna Tingkat Server (Wajib Login)
+    // Otorisasi Pengguna Tingkat Server 
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -28,7 +28,7 @@ export async function POST(req) {
     const verifiedItemsForMidtrans = [];
     const ordersToInsert = [];
 
-    // 2. SERVER-SIDE RE-CALCULATION & STOCK VERIFICATION (Anti-Tampering & Anti-Overselling)
+    // SERVER-SIDE RE-CALCULATION & STOCK VERIFICATION 
     for (const item of items) {
       const { productId, quantity } = item;
 
@@ -79,8 +79,7 @@ export async function POST(req) {
       });
     }
 
-    // 3. OPTIMISTIC INVENTORY LOCKING (Kurangi Stok Seketika)
-    // Jalankan mutasi pengurangan stok satu per satu untuk mengamankan slot fisik barang
+    // INVENTORY LOCKING (Kurangi Stok Seketika)
     for (const orderItem of ordersToInsert) {
       // Ambil stok teraktual kembali untuk mengantisipasi jeda balapan mikrodetik
       const { data: currentProd } = await supabase.from("umkm_products").select("stock").eq("id", orderItem.product_id).single();
@@ -94,7 +93,7 @@ export async function POST(req) {
       if (stockDeductErr) throw new StockDeductErr("Gagal mengunci stok komoditas.");
     }
 
-    // 4. Injeksi Data Pesanan Terkonsolidasi ke Tabel Umkm Orders
+    // Injeksi Data Pesanan Terkonsolidasi ke Tabel Umkm Orders
     const { data: insertedOrders, error: orderInsertErr } = await supabase
       .from("umkm_orders")
       .insert(ordersToInsert)
@@ -113,7 +112,7 @@ export async function POST(req) {
     const primaryOrderId = insertedOrders[0].id;
     const midtransOrderId = `UMKM-${primaryOrderId}`;
 
-    // 5. INTEGRASI REST API GATEWAY MIDTRANS SNAP (SERVER-TO-SERVER)
+    // INTEGRASI REST API GATEWAY MIDTRANS SNAP (SERVER-TO-SERVER)
     const midtransServerKey = process.env.MIDTRANS_SERVER_KEY;
     if (!midtransServerKey) {
       return NextResponse.json({ success: false, message: "Kesalahan Konfigurasi Gateway Server." }, { status: 500 });

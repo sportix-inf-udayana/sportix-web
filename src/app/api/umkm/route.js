@@ -6,7 +6,7 @@ export async function POST(req) {
     const supabase = getSupabase();
     if (!supabase) throw new Error("Database offline.");
 
-    // 1. Otorisasi Mutlak: Penegakan Hak Akses UMKM Seller
+    // Otorisasi Mutlak: Penegakan Hak Akses UMKM Seller
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -25,8 +25,7 @@ export async function POST(req) {
       return new NextResponse(JSON.stringify({ error: "Parameter nama, harga, dan stok wajib diisi." }), { status: 400 });
     }
 
-    // 2. Cegah Injeksi Lintas Toko (Cross-Store Injection)
-    // Jangan pernah percaya store_id dari payload frontend. Tarik id toko berdasarkan user.id.
+    // Cegah Injeksi Lintas Toko (Cross-Store Injection)
     const { data: store, error: storeErr } = await supabase
       .from('umkm_stores')
       .select('id, status')
@@ -41,7 +40,7 @@ export async function POST(req) {
       return new NextResponse(JSON.stringify({ error: "Operasi ditolak. Toko Anda belum disetujui oleh Super Admin." }), { status: 403 });
     }
 
-    // 3. Eksekusi Penambahan Katalog dengan Constraint Fisik Database
+    // Eksekusi Penambahan Katalog dengan Constraint Fisik Database
     const { data: newProduct, error: insertErr } = await supabase
       .from('umkm_products')
       .insert({

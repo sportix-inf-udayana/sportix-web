@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
-// Path relatif murni sesuai arsitektur
 import { getGlobalFinancialMetrics } from "../../../../lib/services/admin.service";
 import SuperAdminHeader from "../../../../components/super-admin/SuperAdminHeader";
 

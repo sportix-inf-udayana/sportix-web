@@ -7,28 +7,27 @@ import { Loader2, AlertTriangle, ShieldCheck, MapPin } from "lucide-react";
 
 import DateCarousel from "./DateCarousel";
 import SlotGrid from "./SlotGrid";
-import PaymentDrawer from "./PaymentDrawer"; 
 
 export default function BookingClient({ venue, user }) {
   const router = useRouter();
   
-  // 1. State Manajemen Transaksi
+  // State Manajemen Transaksi
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [slots, setSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState(null);
   
-  // 2. State Eksekusi Keamanan
+  //State Eksekusi Keamanan
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorLog, setErrorLog] = useState(null);
 
-  // PERBAIKAN 1: Kunci instansi Supabase dengan useMemo agar tidak diciptakan ulang
+  // Kunci instansi Supabase dengan useMemo agar tidak diciptakan ulang
   const supabase = useMemo(() => createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   ), []);
 
-  // PERBAIKAN 2: Bungkus fungsi tarikan data dengan useCallback
+  // Bungkus fungsi tarikan data dengan useCallback
   const fetchSlotsForDate = useCallback(async (dateStr) => {
     setLoadingSlots(true);
     setErrorLog(null);
@@ -70,7 +69,6 @@ export default function BookingClient({ venue, user }) {
     }
   }, [venue.id, supabase]); // Parameter dependensi mutlak
 
-  // PERBAIKAN 3: useEffect sekarang legal dan aman dari infinite loop
   useEffect(() => {
     fetchSlotsForDate(selectedDate);
   }, [selectedDate, fetchSlotsForDate]);
@@ -87,7 +85,7 @@ export default function BookingClient({ venue, user }) {
         throw new Error("Otorisasi terputus. Sesi JWT Anda tidak valid atau telah kadaluarsa.");
       }
 
-      // 1. Eksekusi permintaan ke backend
+      // Eksekusi permintaan ke backend
       const response = await fetch("/api/booking", {
         method: "POST",
         headers: {
@@ -108,12 +106,12 @@ export default function BookingClient({ venue, user }) {
         throw new Error(result.message || "Kondisi Balapan: Slot telah direbut.");
       }
 
-      // 2. Cegat eksekusi jika Snap belum termuat oleh browser
+      // Cegat eksekusi jika Snap belum termuat oleh browser
       if (!window.snap) {
         throw new Error("Mesin pembayaran Midtrans gagal dimuat. Periksa koneksi internet Anda.");
       }
 
-      // 3. Panggil Snap Window dengan token asli
+      // Panggil Snap Window dengan token asli
       window.snap.pay(result.payment_token, {
         onSuccess: function(paymentResult) {
           console.log("Transaksi Selesai", paymentResult);

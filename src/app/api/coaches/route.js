@@ -7,7 +7,7 @@ export async function POST(req) {
     const supabase = getSupabase();
     if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
 
-    // Validasi Sesi (Wajib!)
+    // Validasi Sesi 
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);

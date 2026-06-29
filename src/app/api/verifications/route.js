@@ -7,7 +7,7 @@ export async function POST(req) {
     const supabase = getSupabase();
     if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
 
-    // 1. Otorisasi Mutlak: Harus Super Admin
+    // Otorisasi Mutlak: Harus Super Admin
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
     
@@ -36,7 +36,7 @@ export async function POST(req) {
       default: return NextResponse.json({ success: false, message: "Tipe entitas tidak valid." }, { status: 400 });
     }
 
-    // 2. Eksekusi Pembaruan Status ke Database Nyata
+    // Eksekusi Pembaruan Status ke Database Nyata
     const { data, error: updateErr } = await supabase
       .from(targetTable)
       .update({ status: newStatus })

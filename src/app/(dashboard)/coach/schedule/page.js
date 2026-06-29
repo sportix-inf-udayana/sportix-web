@@ -4,7 +4,6 @@ import { createServerClient } from "@supabase/ssr";
 import Link from "next/link";
 import { Award, DollarSign, AlertCircle } from "lucide-react";
 
-// Path relatif murni sesuai instruksi
 import { getCoachScheduleData } from "../../../../lib/services/coach.service";
 import ScheduleMatrixClient from "../../../../components/coach/ScheduleMatrixClient";
 

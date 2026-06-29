@@ -40,13 +40,13 @@ export default function LoginForm() {
 
       if (signInError) throw signInError;
 
-      // 1. Prioritaskan Callback URL jika ada (menyelesaikan masalah UX)
+      // Prioritaskan Callback URL jika ada 
       if (callbackUrl) {
         router.push(callbackUrl);
         return; 
       }
 
-      // 2. Jika tidak ada callback, gunakan routing bawaan berbasis Role
+      // Jika tidak ada callback, gunakan routing bawaan berbasis Role
       const userRole = data.user.user_metadata?.role;
       switch (userRole) {
         case "SUPER_ADMIN":
