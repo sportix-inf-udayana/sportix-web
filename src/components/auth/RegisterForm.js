@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { Loader2, Shield, User, Mail, Lock } from "lucide-react";
@@ -59,7 +58,9 @@ export default function RegisterForm() {
       }
     } catch (err) {
       console.error("Registration engine fault:", err);
-      setError(err.message || "Gagal menginisiasi akun pada sistem.");
+      // Mengekstrak properti pesan secara agresif dari objek error Supabase
+      const errorMessage = err?.message || err?.error_description || err?.msg || "Terjadi kegagalan sistem yang tidak diketahui.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { Wallet, History, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 
-// Path relatif murni
 import { getCoachWalletData } from "../../../../lib/services/coach.service";
 import WithdrawalClientWrapper from "../../../../components/coach/WithdrawalClientWrapper";
 

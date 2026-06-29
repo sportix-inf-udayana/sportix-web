@@ -28,7 +28,7 @@ export async function POST(req) {
     const bookingPrice = Number(price);
     const lockExpiry = new Date(Date.now() + 15 * 60000).toISOString();
 
-    // 1. Kunci Secara Fisik (Atomic Lock)
+    // Kunci Secara Fisik (Atomic Lock)
     const { data: updatedSlots, error: lockError } = await supabase
       .from("slots")
       .update({ status: "LOCKED", locked_until: lockExpiry })
@@ -40,7 +40,7 @@ export async function POST(req) {
       return new Response(JSON.stringify({ success: false, message: "Conflict: Slot telah dikunci proses lain." }), { status: 409 });
     }
 
-    // 2. Injeksi Transaksi PENDING ke Database
+    // Injeksi Transaksi PENDING ke Database
     const { data: reservation, error: resError } = await supabase
       .from("reservations")
       .insert({
@@ -61,7 +61,7 @@ export async function POST(req) {
       throw resError;
     }
 
-    // 3. NEGOSIASI TOKEN MIDTRANS SISI SERVER (Server-to-Server)
+    // NEGOSIASI TOKEN MIDTRANS SISI SERVER (Server-to-Server)
     const midtransServerKey = process.env.MIDTRANS_SERVER_KEY;
     if (!midtransServerKey) throw new Error("Kunci server Midtrans tidak ditemukan di environment.");
     
@@ -96,7 +96,7 @@ export async function POST(req) {
       throw new Error(`Midtrans API Error: ${snapData.error_messages?.[0] || 'Unknown Error'}`);
     }
 
-    // 4. Update Slot dengan Reservation ID untuk melacak kepemilikan
+    // Update Slot dengan Reservation ID untuk melacak kepemilikan
     await supabase.from("slots").update({ reservation_id: reservation.id }).eq("id", slotId);
 
     // Pengembalian Sukses beserta Token Snap

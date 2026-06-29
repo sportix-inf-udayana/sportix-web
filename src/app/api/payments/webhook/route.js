@@ -6,7 +6,7 @@ export async function POST(req) {
   try {
     const body = await req.json();
     
-    // 1. Validasi Signature Kriptografi Lapis Dasar (Zero-Trust)
+    // Validasi Signature Kriptografi Lapis Dasar (Zero-Trust)
     const serverKey = process.env.MIDTRANS_SERVER_KEY;
     if (!serverKey) {
       console.error("CRITICAL HALT: MIDTRANS_SERVER_KEY tidak ditemukan di environment.");
@@ -34,8 +34,7 @@ export async function POST(req) {
       return new Response(JSON.stringify({ reconciled: false, message: "Unauthorized. Signature ditolak." }), { status: 401 });
     }
 
-    // 2. Destrukturisasi Tipe Data (Menyelamatkan Crash PostgreSQL UUID)
-    // Format yang diharapkan: "PREFIX-uuid_asli" (e.g., "REV-123e4567-...")
+    // Destrukturisasi Tipe Data 
     const firstDashIndex = order_id.indexOf('-');
     if (firstDashIndex === -1) {
       return new Response(JSON.stringify({ reconciled: false, message: "Format Order ID tidak valid (Prefix hilang)." }), { status: 400 });
@@ -50,10 +49,10 @@ export async function POST(req) {
     const isSettled = ["settlement", "capture"].includes(transaction_status.toLowerCase());
     const isExpiredOrFailed = ["expire", "cancel", "deny"].includes(transaction_status.toLowerCase());
 
-    // 3. Routing Berdasarkan Ekosistem (Reservasi, Turnamen, UMKM)
+    // Routing Berdasarkan Ekosistem (Reservasi, Turnamen, UMKM)
     if (isSettled) {
       
-      // --- A. EKOSISTEM RESERVASI LAPANGAN (REV) ---
+      // EKOSISTEM RESERVASI LAPANGAN (REV)
       if (prefix === "REV") {
         const { data: reservation, error: fetchErr } = await supabase
           .from("reservations")
@@ -107,7 +106,7 @@ export async function POST(req) {
         });
       }
 
-      // --- B. EKOSISTEM TURNAMEN LOKAL (TRN) ---
+      // EKOSISTEM TURNAMEN LOKAL (TRN) 
       else if (prefix === "TRN") {
         const { data: registration } = await supabase
           .from("tournament_registrations")
@@ -132,7 +131,7 @@ export async function POST(req) {
         }
       }
 
-      // --- C. EKOSISTEM LOKAPASAR KONSINYASI UMKM (UMKM) ---
+      // EKOSISTEM LOKAPASAR KONSINYASI UMKM (UMKM) 
       else if (prefix === "UMKM") {
         const { data: order } = await supabase
           .from("umkm_orders")
@@ -141,13 +140,13 @@ export async function POST(req) {
           .single();
 
         if (order && order.status === "PENDING_PAYMENT") {
-          // 1. Naikkan status menjadi PREPARING
+          // Naikkan status menjadi PREPARING
           await supabase
             .from("umkm_orders")
             .update({ status: "PREPARING" })
             .eq("id", actualUuid);
 
-          // 2. Alirkan dana bersih ke Buku Besar (Ledger CREDIT) milik Toko UMKM Merchant
+          // Alirkan dana bersih ke Buku Besar (Ledger CREDIT) milik Toko UMKM Merchant
           const { data: storeInfo } = await supabase.from("umkm_stores").select("owner_id").eq("id", order.store_id).single();
           
           if (storeInfo) {
@@ -163,7 +162,7 @@ export async function POST(req) {
       }
 
     } else if (isExpiredOrFailed) {
-      // 4. Logika Pembersihan & Rollback (Kegagalan Pembayaran)
+      // Logika Pembersihan & Rollback (Kegagalan Pembayaran)
       
       if (prefix === "REV") {
         const { data: reservation } = await supabase.from("reservations").select("status, field_id").eq("id", actualUuid).single();
@@ -190,10 +189,10 @@ export async function POST(req) {
            .single();
            
          if (order && order.status === "PENDING_PAYMENT") {
-           // 1. Batalkan Pesanan
+           // Batalkan Pesanan
            await supabase.from("umkm_orders").update({ status: "CANCELLED" }).eq("id", actualUuid);
            
-           // 2. Kembalikan (Rollback) Stok Barang Fisik ke Toko
+           // Kembalikan (Rollback) Stok Barang Fisik ke Toko
            if (order.product_id && order.quantity) {
              const { data: currentProd } = await supabase.from("umkm_products").select("stock").eq("id", order.product_id).single();
              if (currentProd) {

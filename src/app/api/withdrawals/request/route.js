@@ -6,7 +6,7 @@ export async function POST(req) {
     const supabase = getSupabase();
     if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
 
-    // 1. Verifikasi Sesi JWT
+    // Verifikasi Sesi JWT
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -20,7 +20,7 @@ export async function POST(req) {
       return NextResponse.json({ success: false, message: "Payload penarikan tidak valid." }, { status: 400 });
     }
 
-    // 2. Cegah Exploit Chaining (Race Condition & Over-Withdrawal)
+    // Cegah Exploit Chaining (Race Condition & Over-Withdrawal)
     // Cek apakah ada request penarikan yang masih PENDING. Jika ada, blokir!
     const { data: existingPending, error: pendingErr } = await supabase
       .from("withdrawal_logs")
@@ -36,7 +36,7 @@ export async function POST(req) {
       }, { status: 429 });
     }
 
-    // 3. Tarik Saldo Aktual dari Tabel Balances (Single Source of Truth)
+    // Tarik Saldo Aktual dari Tabel Balances (Single Source of Truth)
     const { data: balanceData, error: balanceErr } = await supabase
       .from("balances")
       .select("available_balance")
@@ -54,7 +54,7 @@ export async function POST(req) {
       }, { status: 403 });
     }
 
-    // 4. Injeksi Data Pengajuan ke Log (Menunggu Approval Super Admin)
+    // Injeksi Data Pengajuan ke Log (Menunggu Approval Super Admin)
     const { error: insertErr } = await supabase
       .from("withdrawal_logs")
       .insert({

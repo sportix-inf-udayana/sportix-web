@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 // Endpoint ini harus dipanggil oleh Vercel Cron setiap 1 menit
 export async function POST(req) {
   try {
-    // Keamanan: Validasi Secret Key untuk memastikan panggilan berasal dari Vercel/Sistem Internal
+    // Validasi Secret Key untuk memastikan panggilan berasal dari Vercel/Sistem Internal
     const authHeader = req.headers.get("authorization");
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
@@ -12,7 +12,6 @@ export async function POST(req) {
 
     const supabase = getSupabase();
 
-    // Memanggil fungsi RPC PostgreSQL yang telah kita rancang di SRS
     // Fungsi 'enforce_strict_forfeits' menangani logika denda 100% dan rilis slot
     const { error } = await supabase.rpc("enforce_strict_forfeits", {
       current_utc_time: new Date().toISOString(),

@@ -4,11 +4,6 @@ import SlotMatrixClient from "../../../../components/admin-venue/SlotMatrixClien
 export const dynamic = 'force-dynamic';
 
 export default async function AdminVenueSlotsPage() {
-  // PENGINGAT ARSITEKTUR:
-  // Verifikasi token JWT, Role "ADMIN_VENUE", serta rendering Header & Footer 
-  // sudah dieksekusi secara ketat oleh src/app/(dashboard)/admin-venue/layout.js.
-  // Halaman ini bebas dari beban otorisasi dan langsung fokus merender fungsionalitas.
-
   return (
     <div className="w-full space-y-6">
       

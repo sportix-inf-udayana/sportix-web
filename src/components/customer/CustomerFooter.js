@@ -7,7 +7,7 @@ export default function CustomerFooter() {
   return (
     <footer className="w-full bg-zinc-950 border-t border-zinc-800 pt-12 pb-6 mt-auto">
       <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-        {/* Kolom 1: Brand & Visi */}
+        {/* Brand & Visi */}
         <div className="col-span-1 md:col-span-2">
           <Link href="/" className="font-mono font-black text-2xl tracking-wider text-white inline-block mb-4">
             SPORTIX<span className="text-brand-emerald">.</span>
@@ -17,7 +17,7 @@ export default function CustomerFooter() {
           </p>
         </div>
 
-        {/* Kolom 2: Navigasi Cepat */}
+        {/* Navigasi Cepat */}
         <div>
           <h4 className="text-white font-semibold mb-4 tracking-tight">Eksplorasi</h4>
           <ul className="space-y-2 text-sm text-brand-slate font-medium">
@@ -27,7 +27,7 @@ export default function CustomerFooter() {
           </ul>
         </div>
 
-        {/* Kolom 3: Legalitas & Bantuan */}
+        {/* Legalitas & Bantuan */}
         <div>
           <h4 className="text-white font-semibold mb-4 tracking-tight">Dukungan</h4>
           <ul className="space-y-2 text-sm text-brand-slate font-medium">

@@ -5,8 +5,8 @@ import Link from "next/link";
 import { Award } from "lucide-react";
 
 // Path relatif murni
-import { getUmkmCatalog } from "../../../../lib/services/customer.service";
-import UmkmCatalogClient from "../../../../components/customer/UmkmCatalogClient";
+import { getUmkmCatalog } from "../../../lib/services/customer.service";
+import UmkmCatalogClient from "../../../components/customer/UmkmCatalogClient";
 
 export const dynamic = 'force-dynamic';
 

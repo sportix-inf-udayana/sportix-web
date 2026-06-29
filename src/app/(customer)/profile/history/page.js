@@ -4,12 +4,11 @@ import { createServerClient } from "@supabase/ssr";
 import Link from "next/link";
 import { Award, Ticket, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 
-// Path relatif murni
 import { getUserTicketHistory } from "../../../../../lib/services/customer.service";
 
 export const dynamic = 'force-dynamic';
 
-// Komponen Barcode Statis (Tidak membutuhkan Client Component)
+// Komponen Barcode Statis 
 const Barcode = ({ code }) => {
   return (
     <div className="flex flex-col items-center p-4 bg-white rounded-lg border border-zinc-200">

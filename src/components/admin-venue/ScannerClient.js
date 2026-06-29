@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { QrReader } from "react-qr-reader"; // Asumsi penggunaan library ini
+import { QrReader } from "react-qr-reader"; 
 import { Camera, CheckCircle, AlertTriangle, RefreshCw } from "lucide-react";
 
 export default function ScannerClient() {

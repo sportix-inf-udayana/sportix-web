@@ -16,13 +16,13 @@ export default function CustomerHeader({ user }) {
   );
 
   const handleLogout = async () => {
-    // 1. Hancurkan token JWT di cookie browser dan server session table
+    // Hancurkan token JWT di cookie browser dan server session table
     await supabase.auth.signOut();
     
-    // 2. Paksa Server Component untuk mengevaluasi ulang tata letak (Layout)
+    // Paksa Server Component untuk mengevaluasi ulang tata letak (Layout)
     router.refresh();
     
-    // 3. Kembalikan pengguna ke beranda publik dengan state bersih
+    // Kembalikan pengguna ke beranda publik dengan state bersih
     router.push("/");
   };
 
@@ -37,7 +37,7 @@ export default function CustomerHeader({ user }) {
           </Link>
           
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-brand-slate">
-            <Link href="/" className="hover:text-white transition-colors">Aktivitas</Link>
+            <Link href="/" className="hover:text-white transition-colors">Home</Link>
             <Link href="/umkm" className="flex items-center gap-1.5 hover:text-white transition-colors">
               <ShoppingBag className="w-4 h-4" />
               <span>Merchandise</span>

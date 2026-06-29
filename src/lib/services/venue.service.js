@@ -11,13 +11,13 @@ export async function getVerifiedVenues(supabase) {
       return [];
     }
 
-    // Transformasi data agar sesuai dengan kontrak UI
+    // Transformasi data 
     return (venues || []).map((v) => ({
       id: v.id,
       name: v.name,
       location: v.address || "Bali, Indonesia",
-      image: "/public/image/venue-fallback.svg", // Menggunakan path yang benar
-      rating: 4.8, // Placeholder: Bisa ditambahkan kolom rating di DB nanti
+      image: "/public/image/venue-fallback.svg", 
+      rating: 4.8, 
       price: "IDR 150,000 / Jam",
       sport: "Futsal",
       tags: ["Verified", "Cashless"]
