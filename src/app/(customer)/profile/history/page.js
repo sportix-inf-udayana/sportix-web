@@ -4,7 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import Link from "next/link";
 import { Award, Ticket, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 
-import { getUserTicketHistory } from "../../../../../lib/services/customer.service";
+import { getUserTicketHistory } from "@/lib/services/customer.service";
 
 export const dynamic = 'force-dynamic';
 
@@ -91,7 +91,7 @@ export default async function ProfileHistoryPage() {
           <div className="pb-4 text-sm relative text-brand-neon font-bold flex items-center">
             My Tickets
             <span className="ml-1.5 bg-brand-emerald/15 text-brand-neon text-micro px-1.5 py-0.5 rounded-full font-mono">
-              {activeTickets.length} Active
+              {activeTickets?.length || 0} Active
             </span>
             <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand-neon glow-emerald" />
           </div>
