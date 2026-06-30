@@ -18,30 +18,29 @@ export default async function BookingPage({ params }) {
     { cookies: { getAll() { return cookieStore.getAll(); } } }
   );
 
-  // Validasi Sesi
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     redirect(`/login?callback=/booking/${venueId}`);
   }
 
-  // 2. Tarik detail arena (Pastikan fungsi ini mengembalikan format { data, error })
   const { data: venueData, error } = await getVenueDetail(supabase, venueId);
 
-  // 3. Fallback jika ID arena tidak valid atau data gagal ditarik
-  if (error || !venueData) {
+  // FIX LUBANG BYPASS: Blokir hak akses pemesanan secara absolut jika status arena tidak bernilai APPROVED
+  if (error || !venueData || venueData.status !== 'APPROVED') {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-4">
-          <h2 className="text-2xl font-bold text-white">Arena Tidak Ditemukan</h2>
-          <p className="text-brand-slate">Fasilitas yang Anda cari mungkin sedang tidak aktif atau ID tidak valid.</p>
+      <div className="flex items-center justify-center min-h-[60vh] bg-zinc-950 font-sans">
+        <div className="text-center space-y-4 max-w-sm px-6">
+          <h2 className="text-xl font-black text-white font-display uppercase tracking-tight">Akses Booking Ditutup</h2>
+          <p className="text-zinc-500 text-xs leading-relaxed">
+            Fasilitas olahraga ini belum memenuhi kualifikasi verifikasi legalitas fisik atau sedang dinonaktifkan sementara oleh Super Admin.
+          </p>
         </div>
       </div>
     );
   }
 
-  // Render komponen klien
   return (
-    <div className="w-full">
+    <div className="w-full bg-zinc-950">
       <BookingClient venue={venueData} user={user} />
     </div>
   );

@@ -1,9 +1,9 @@
-import React from "react";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
 import SlotMatrixClient from "../../../../components/admin-venue/SlotMatrixClient";
 
+// FIX 1: Cegah caching jadwal agar operator tidak salah melihat status ketersediaan arena
 export const dynamic = 'force-dynamic';
 
 export default async function AdminVenueSlotsPage() {
@@ -16,40 +16,57 @@ export default async function AdminVenueSlotsPage() {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // INTERCEPTOR: Cek apakah user sudah punya arena. Jika belum, tendang ke Onboarding!
-  const { data: venue } = await supabase
+  // FIX 2: Kunci akses halaman di tingkat kontainer server
+  if (!user || user.user_metadata?.role !== 'ADMIN_VENUE') {
+    redirect("/login");
+  }
+
+  // Dapatkan profil arena yang dikelola oleh user terkait
+  const { data: venue, error: venueErr } = await supabase
     .from("venues")
-    .select("id")
+    .select("id, name, status")
     .eq("owner_id", user.id)
     .single();
 
-  if (!venue) {
-    redirect("/admin-venue/onboarding");
+  // Redirect ke halaman pending apabila berkas fisik arena belum divalidasi oleh Super Admin
+  if (venueErr || !venue || venue.status !== 'APPROVED') {
+    redirect("/admin-venue/pending");
   }
 
-  // Jika lolos (baik PENDING atau VERIFIED, Layout yang urus visibilitasnya), muat data slot normal
-  const today = new Date().toLocaleDateString('en-CA'); // Format YYYY-MM-DD standar UTC
-  const { data: slots } = await supabase
-    .from("venue_slots")
-    .select(`
-      id, time, status, price,
-      reservations ( id, status, payment_gateway_ref, users ( full_name, phone ) )
-    `)
+  // Dapatkan detail data lapangan internal dari arena
+  const { data: field } = await supabase
+    .from("fields")
+    .select("id")
     .eq("venue_id", venue.id)
-    .eq("date", today)
-    .order("time", { ascending: true });
+    .maybeSingle();
+
+  let initialSlots = [];
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  if (field) {
+    // Tarik data slot jadwal hari ini secara dinamis dari database master
+    const { data: slotData } = await supabase
+      .from("slots")
+      .select("id, start_time, end_time, status")
+      .eq("field_id", field.id)
+      .eq("slot_date", todayStr)
+      .order("start_time", { ascending: true });
+      
+    initialSlots = slotData || [];
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="border-b border-zinc-800 pb-4 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-white font-display">Timeline & Slot Matrix</h1>
-          <p className="text-zinc-400 text-sm mt-1">
-            Kendali real-time ketersediaan lapangan. Sistem akan mengunci slot otomatis saat transaksi berlangsung.
-          </p>
-        </div>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-col space-y-1">
+        <h1 className="text-xl font-black font-display text-white uppercase tracking-tight">
+          Pusat Operasional Arena
+        </h1>
+        <p className="text-xs text-zinc-500 font-mono uppercase">
+          Fasilitas Aktif: <span className="text-brand-neon">{venue.name}</span>
+        </p>
       </div>
-      <SlotMatrixClient initialSlots={slots || []} currentDate={today} venueId={venue.id} />
+
+      <SlotMatrixClient initialSlots={initialSlots} venueId={venue.id} />
     </div>
   );
 }

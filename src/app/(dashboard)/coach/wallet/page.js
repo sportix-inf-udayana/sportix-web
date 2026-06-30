@@ -1,9 +1,6 @@
-import React from "react";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { Wallet, History, ArrowDownLeft, ArrowUpRight } from "lucide-react";
-
-import { getCoachWalletData } from "../../../../lib/services/coach.service";
+import { redirect } from "next/navigation";
 import WithdrawalClientWrapper from "../../../../components/coach/WithdrawalClientWrapper";
 
 export const dynamic = 'force-dynamic';
@@ -16,88 +13,31 @@ export default async function CoachWalletPage() {
     { cookies: { getAll() { return cookieStore.getAll(); } } }
   );
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return <div className="p-8 text-red-500 font-mono text-center">Akses Ditolak.</div>;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || user.user_metadata?.role !== 'COACH') redirect("/login");
 
-  const { availableBalance, pendingBalance, ledgerHistory } = await getCoachWalletData(supabase, user.id);
+  const { data: coach } = await supabase.from("coaches").select("status").eq("owner_id", user.id).maybeSingle();
+
+  if (!coach) redirect("/coach/onboarding");
+  if (coach.status === 'PENDING') redirect("/coach/pending");
+  if (coach.status === 'REJECTED') redirect("/coach/onboarding");
+
+  // Mengambil data saldo kas pelatih secara aman
+  const { data: balanceData } = await supabase
+    .from("balances")
+    .select("available_balance, pending_balance")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const safeBalance = balanceData || { available_balance: 0, pending_balance: 0 };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 mt-8 font-sans select-none">
-      <div className="mb-8">
-        <span className="text-xs font-mono text-zinc-500 tracking-wider uppercase block mb-1">
-          COACH REVENUE SYSTEM
-        </span>
-        <h1 className="text-2xl md:text-3xl font-extrabold text-white font-display flex items-center gap-3">
-          <Wallet className="w-8 h-8 text-brand-neon" /> Dompet Digital
-        </h1>
+    <div className="p-6 max-w-7xl mx-auto space-y-6 text-white font-sans">
+      <div className="flex flex-col">
+        <h1 className="text-xl font-black font-display uppercase tracking-tight">Manajemen Finansial Instruktur</h1>
+        <p className="text-xs text-zinc-500 font-mono">Pencairan Honorarium Kontrak Hasil Bimbingan Latihan</p>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2 bg-gradient-to-br from-zinc-900 to-surface-elevated border border-zinc-800 rounded-2xl p-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-brand-neon/5 rounded-full blur-[80px] pointer-events-none" />
-          <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <div>
-              <span className="text-xs font-mono text-zinc-400 uppercase tracking-widest block mb-2">SALDO TERSEDIA</span>
-              {/* DEFENSIVE FIX: Number casting */}
-              <div className="text-4xl md:text-5xl font-black text-white font-display tracking-tight">
-                Rp {Number(availableBalance || 0).toLocaleString("id-ID")}
-              </div>
-              <div className="mt-3 text-xs font-mono text-zinc-500">
-                Tertunda (Menunggu Penyelesaian SLA): <span className="text-brand-amber font-bold">Rp {Number(pendingBalance || 0).toLocaleString("id-ID")}</span>
-              </div>
-            </div>
-            <WithdrawalClientWrapper maxBalance={availableBalance} />
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-surface border border-zinc-800 rounded-2xl overflow-hidden">
-        <div className="p-6 border-b border-zinc-800 flex items-center gap-2 bg-surface-elevated">
-          <History className="w-5 h-5 text-zinc-400" />
-          <h3 className="font-bold text-white font-display">Mutasi Buku Besar (Double-Entry Log)</h3>
-        </div>
-        
-        {ledgerHistory && ledgerHistory.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-zinc-400">
-              <thead className="bg-zinc-900/50 font-mono text-xs uppercase border-b border-zinc-800">
-                <tr>
-                  <th className="px-6 py-4">Waktu Transaksi (UTC)</th>
-                  <th className="px-6 py-4">Tipe / Sumber</th>
-                  <th className="px-6 py-4 text-right">Nominal (Rp)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/50 font-mono">
-                {ledgerHistory.map((log) => (
-                  <tr key={log.id} className="hover:bg-surface-elevated transition-colors">
-                    <td className="px-6 py-4 text-xs">{new Date(log.created_at).toLocaleString('id-ID')}</td>
-                    <td className="px-6 py-4">
-                      <span className="text-white font-bold">{log.source.replace(/_/g, ' ')}</span>
-                      <span className={`block mt-1 text-micro px-2 py-0.5 rounded w-max ${
-                        log.transaction_type === 'CREDIT' ? 'bg-brand-emerald/10 text-brand-emerald' : 'bg-red-500/10 text-red-400'
-                      }`}>
-                        {log.transaction_type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className={`flex items-center justify-end gap-2 font-bold ${
-                        log.transaction_type === 'CREDIT' ? 'text-brand-emerald' : 'text-red-400'
-                      }`}>
-                        {log.transaction_type === 'CREDIT' ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
-                        {Number(log.amount || 0).toLocaleString("id-ID")}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="p-12 text-center text-zinc-500 text-sm font-mono">
-            Belum ada aktivitas transaksi finansial yang terekam pada buku besar Anda.
-          </div>
-        )}
-      </div>
+      <WithdrawalClientWrapper balance={safeBalance} />
     </div>
   );
 }
