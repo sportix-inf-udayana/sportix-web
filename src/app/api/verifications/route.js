@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { getSupabase } from "../../../lib/supabase";
+import { getSupabaseAdmin } from "../../../lib/supabase";
 
 export async function POST(req) {
   const startTime = Date.now();
   try {
-    const supabase = getSupabase();
+    // FIX: Menggunakan service role administrative client untuk bypass pembatasan update RLS publik
+    const supabase = getSupabaseAdmin();
     if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
 
-    // Otorisasi Mutlak: Harus Super Admin
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
     
@@ -36,7 +36,6 @@ export async function POST(req) {
       default: return NextResponse.json({ success: false, message: "Tipe entitas tidak valid." }, { status: 400 });
     }
 
-    // Eksekusi Pembaruan Status ke Database Nyata
     const { data, error: updateErr } = await supabase
       .from(targetTable)
       .update({ status: newStatus })

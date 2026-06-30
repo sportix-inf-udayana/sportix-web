@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { getSupabase } from "../../../../lib/supabase";
+import { getSupabaseUser } from "../../../../lib/supabase";
 
 export async function PATCH(req) {
   try {
-    const supabase = getSupabase();
-    if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
-
-    // Verifikasi Identitas JWT
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (!token) return NextResponse.json({ success: false, message: "Missing Token" }, { status: 401 });
+
+    // FIX: Menggunakan RLS token admin venue untuk mengisolasi operasi modifikasi data slot
+    const supabase = getSupabaseUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ success: false, message: "Akses Ditolak." }, { status: 401 });
@@ -22,35 +22,28 @@ export async function PATCH(req) {
       return NextResponse.json({ success: false, message: "Payload instruksi tidak lengkap." }, { status: 400 });
     }
 
-    // Tarik Data Slot & Validasi Kepemilikan Venue Mutlak
+    // Jika RLS aktif, kueri ini otomatis gagal/kosong jika admin mencoba mengambil slot milik orang lain
     const { data: slotInfo, error: slotErr } = await supabase
       .from("slots")
-      .select("id, status, venue_id, venues(owner_id)")
+      .select("id, status, venue_id, reservation_id, venues(owner_id)")
       .eq("id", slotId)
       .single();
 
     if (slotErr || !slotInfo) {
-      return NextResponse.json({ success: false, message: "Slot fisik tidak ditemukan di database." }, { status: 404 });
+      return NextResponse.json({ success: false, message: "Slot tidak ditemukan atau Anda tidak memiliki akses properti." }, { status: 404 });
     }
 
-    if (slotInfo.venues?.owner_id !== user.id) {
-      console.warn(`[RED TEAM ALERT]: Admin ${user.id} mencoba memanipulasi slot venue lain.`);
-      return NextResponse.json({ success: false, message: "Forbidden. Akses properti ilegal." }, { status: 403 });
-    }
-
-    // Atomicity Guard: Cegah Race Condition
     if (expectedCurrentState && slotInfo.status !== expectedCurrentState) {
       return NextResponse.json({ 
         success: false, 
-        message: `Konflik status. Slot telah diubah oleh agen lain menjadi ${slotInfo.status}. Harap muat ulang matriks.` 
+        message: `Konflik status. Slot telah diubah oleh agen lain menjadi ${slotInfo.status}.` 
       }, { status: 409 });
     }
 
-    // Eksekusi Perubahan Status
     const updatePayload = { status: targetState };
-    
     if (targetState === 'AVAILABLE') {
       updatePayload.locked_until = null;
+      updatePayload.reservation_id = null;
     }
 
     const { error: updateErr } = await supabase
@@ -60,18 +53,17 @@ export async function PATCH(req) {
 
     if (updateErr) throw updateErr;
 
-    // Jika force cancel dari BOOKED ke AVAILABLE, pastikan reservasi terkait dibatalkan
-    if (expectedCurrentState === 'BOOKED' && targetState === 'AVAILABLE') {
+    if (expectedCurrentState === 'BOOKED' && targetState === 'AVAILABLE' && slotInfo.reservation_id) {
       await supabase
         .from("reservations")
         .update({ status: 'CANCELLED_BY_ADMIN' })
-        .eq("field_id", slotId)
+        .eq("id", slotInfo.reservation_id)
         .in("status", ["CONFIRMED", "PENDING"]);
     }
 
     return NextResponse.json({
       success: true,
-      message: `Status slot berhasil diforsir menjadi ${targetState}.`
+      message: `Status slot berhasil diubah menjadi ${targetState}.`
     });
 
   } catch (error) {

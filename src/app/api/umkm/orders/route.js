@@ -1,56 +1,43 @@
 import { NextResponse } from "next/server";
-import { getSupabase } from "../../../../lib/supabase";
+import { getSupabaseUser } from "../../../lib/supabase";
 
-export async function PATCH(req) {
+export async function GET(req) {
   try {
-    const supabase = getSupabase();
-    if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
-
-    // 1. Verifikasi JWT Penjual
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (!token) return NextResponse.json({ success: false, message: "Missing Token" }, { status: 401 });
 
-    if (authError || !user || user.user_metadata?.role !== 'UMKM_SELLER') {
-      return NextResponse.json({ success: false, message: "Akses Ditolak. Khusus Penjual UMKM." }, { status: 403 });
+    // FIX: Mengikat token ke database agar RLS bekerja memilah hak akses order secara otomatis
+    const supabase = getSupabaseUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+
+    const role = user.user_metadata?.role || "CUSTOMER";
+
+    let query = supabase.from("umkm_orders").select(`
+      id, status, courier_name, delivery_address, total_price, created_at,
+      umkm_products ( name, price )
+    `);
+
+    // Pembagian logika penarikan data secara aman berdasarkan role pengguna
+    if (role === "UMKM_SELLER") {
+      const { data: store } = await supabase.from("umkm_stores").select("id").eq("owner_id", user.id).single();
+      if (store) {
+        query = query.eq("store_id", store.id);
+      } else {
+        return NextResponse.json({ success: true, orders: [] });
+      }
+    } else {
+      // Pembeli biasa hanya diizinkan melihat riwayat transaksinya sendiri
+      query = query.eq("user_id", user.id);
     }
 
-    const body = await req.json();
-    const { orderId, courierName, status } = body;
+    const { data: orders, error: fetchErr } = await query.order("created_at", { ascending: false });
+    if (fetchErr) throw fetchErr;
 
-    if (!orderId || !courierName || !status) {
-      return NextResponse.json({ success: false, message: "Payload pengiriman tidak valid." }, { status: 400 });
-    }
-
-    // 2. Validasi Kepemilikan Toko (Mencegah Admin Toko A meng-update pesanan Toko B)
-    const { data: storeCheck } = await supabase
-      .from('umkm_stores')
-      .select('id')
-      .eq('owner_id', user.id)
-      .single();
-
-    if (!storeCheck) {
-       return NextResponse.json({ success: false, message: "Toko tidak terdaftar." }, { status: 404 });
-    }
-
-    // 3. Eksekusi Update ke Database
-    const { error: updateErr } = await supabase
-      .from('umkm_orders')
-      .update({ 
-        courier_name: courierName.trim(),
-        status: status 
-      })
-      .eq('id', orderId)
-      .eq('store_id', storeCheck.id); // Guard rail mutlak
-
-    if (updateErr) throw updateErr;
-
-    return NextResponse.json({
-      success: true,
-      message: `Status pesanan ${orderId} berhasil diperbarui menjadi ${status}.`
-    });
-
+    return NextResponse.json({ success: true, orders: orders || [] });
   } catch (error) {
-    return NextResponse.json({ success: false, error: "Kesalahan server internal." }, { status: 500 });
+    console.error("UMKM Orders API Error:", error);
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }
