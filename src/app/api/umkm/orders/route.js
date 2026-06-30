@@ -7,7 +7,6 @@ export async function GET(req) {
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
     if (!token) return NextResponse.json({ success: false, message: "Missing Token" }, { status: 401 });
 
-    // FIX: Mengikat token ke database agar RLS bekerja memilah hak akses order secara otomatis
     const supabase = getSupabaseUser(token);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
@@ -19,7 +18,6 @@ export async function GET(req) {
       umkm_products ( name, price )
     `);
 
-    // Pembagian logika penarikan data secara aman berdasarkan role pengguna
     if (role === "UMKM_SELLER") {
       const { data: store } = await supabase.from("umkm_stores").select("id").eq("owner_id", user.id).single();
       if (store) {
@@ -28,7 +26,6 @@ export async function GET(req) {
         return NextResponse.json({ success: true, orders: [] });
       }
     } else {
-      // Pembeli biasa hanya diizinkan melihat riwayat transaksinya sendiri
       query = query.eq("user_id", user.id);
     }
 
@@ -38,6 +35,52 @@ export async function GET(req) {
     return NextResponse.json({ success: true, orders: orders || [] });
   } catch (error) {
     console.error("UMKM Orders API Error:", error);
+    return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
+  }
+}
+
+// FIX UTUH: Tambahkan handler PATCH untuk menyambungkan alur ShipmentDispatcherClient milik penjual
+export async function PATCH(req) {
+  try {
+    const authHeader = req.headers.get('Authorization');
+    const token = authHeader ? authHeader.replace('Bearer ', '') : null;
+    if (!token) return NextResponse.json({ success: false, message: "Missing Token" }, { status: 401 });
+
+    const supabase = getSupabaseUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+
+    const body = await req.json();
+    const { orderId, targetStatus, courierName } = body;
+
+    if (!orderId || !targetStatus) {
+      return NextResponse.json({ success: false, message: "Parameter update tidak lengkap." }, { status: 400 });
+    }
+
+    // Pastikan penjual hanya bisa mengubah status order dari toko miliknya sendiri (Anti IDOR)
+    const { data: store } = await supabase.from("umkm_stores").select("id").eq("owner_id", user.id).single();
+    if (!store) {
+      return NextResponse.json({ success: false, message: "Akses Ditolak. Profil toko jualan Anda tidak valid." }, { status: 403 });
+    }
+
+    const { data: updatedOrder, error: updateErr } = await supabase
+      .from("umkm_orders")
+      .update({
+        status: targetStatus,
+        courier_name: courierName?.trim() || "Kurir Pengantar Lokal"
+      })
+      .eq("id", orderId)
+      .eq("store_id", store.id) // Kunci isolasi multi-tenant jualan
+      .select();
+
+    if (updateErr || !updatedOrder || updatedOrder.length === 0) {
+      return NextResponse.json({ success: false, message: "Gagal memproses perubahan logistik barang atau order ilegal." }, { status: 409 });
+    }
+
+    return NextResponse.json({ success: true, message: "Manifes status logistik kiriman berhasil diperbarui." });
+
+  } catch (error) {
+    console.error("UMKM Orders Patch Panic:", error);
     return NextResponse.json({ success: false, error: "Internal Server Error" }, { status: 500 });
   }
 }

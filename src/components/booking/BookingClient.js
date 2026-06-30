@@ -7,6 +7,7 @@ import { Loader2, AlertTriangle, ShieldCheck, MapPin } from "lucide-react";
 
 import DateCarousel from "./DateCarousel";
 import SlotGrid from "./SlotGrid";
+import PaymentDrawer from "./PaymentDrawer";
 
 export default function BookingClient({ venue, user }) {
   const router = useRouter();
@@ -17,17 +18,16 @@ export default function BookingClient({ venue, user }) {
   const [loadingSlots, setLoadingSlots] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState(null);
   
-  //State Eksekusi Keamanan
-  const [isProcessing, setIsProcessing] = useState(false);
+  // State Eksekusi Kontrol Modal
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [activeToken, setActiveToken] = useState(null);
   const [errorLog, setErrorLog] = useState(null);
 
-  // Kunci instansi Supabase dengan useMemo agar tidak diciptakan ulang
   const supabase = useMemo(() => createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   ), []);
 
-  // Bungkus fungsi tarikan data dengan useCallback
   const fetchSlotsForDate = useCallback(async (dateStr) => {
     setLoadingSlots(true);
     setErrorLog(null);
@@ -62,88 +62,37 @@ export default function BookingClient({ venue, user }) {
 
       setSlots(mappedSlots);
     } catch (err) {
-      console.error("Sinkronisasi Ledger Gagal:", err);
+      console.error("Sinkronisasi Jadwal Gagal:", err);
       setErrorLog(err.message || "Gagal memuat jadwal matriks ketersediaan.");
     } finally {
       setLoadingSlots(false);
     }
-  }, [venue.id, supabase]); // Parameter dependensi mutlak
+  }, [venue.id, supabase]);
 
   useEffect(() => {
     fetchSlotsForDate(selectedDate);
   }, [selectedDate, fetchSlotsForDate]);
 
-  const handleLockAndCheckout = async () => {
+  // FIX LUBANG INTEGRASI: Ekstrak sesi token saat tombol konfirmasi ditekan dan buka PaymentDrawer
+  const handleOpenPaymentGate = async () => {
     if (!selectedSlot) return;
-    setIsProcessing(true);
     setErrorLog(null);
 
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError || !session) {
-        throw new Error("Otorisasi terputus. Sesi JWT Anda tidak valid atau telah kadaluarsa.");
+        throw new Error("Otorisasi terputus. Sesi Anda tidak valid, harap log in kembali.");
       }
 
-      // Eksekusi permintaan ke backend
-      const response = await fetch("/api/booking", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          slotId: selectedSlot.id,
-          time: selectedSlot.start_time,
-          date: selectedSlot.slot_date,
-          price: selectedSlot.price
-        })
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Kondisi Balapan: Slot telah direbut.");
-      }
-
-      // Cegat eksekusi jika Snap belum termuat oleh browser
-      if (!window.snap) {
-        throw new Error("Mesin pembayaran Midtrans gagal dimuat. Periksa koneksi internet Anda.");
-      }
-
-      // Panggil Snap Window dengan token asli
-      window.snap.pay(result.payment_token, {
-        onSuccess: function(paymentResult) {
-          console.log("Transaksi Selesai", paymentResult);
-          // Midtrans Webhook (di server) yang akan mengubah status ke CONFIRMED.
-          // Klien hanya perlu dipindahkan ke halaman riwayat.
-          router.push("/profile/history");
-        },
-        onPending: function(paymentResult) {
-          console.log("Menunggu Pembayaran", paymentResult);
-          router.push("/profile/history");
-        },
-        onError: function(paymentResult) {
-          console.error("Pembayaran Gagal", paymentResult);
-          setErrorLog("Transaksi ditolak oleh sistem pembayaran.");
-          fetchSlotsForDate(selectedDate);
-          setSelectedSlot(null);
-        },
-        onClose: function() {
-          // Jika pelanggan iseng menutup popup sebelum membayar
-          console.warn("Popup ditutup tanpa penyelesaian.");
-          setErrorLog("Sistem membatalkan transaksi karena jendela ditutup.");
-          fetchSlotsForDate(selectedDate);
-          setSelectedSlot(null);
-        }
-      });
+      // Simpan JWT token ke state untuk disalurkan ke dalam PaymentDrawer
+      setActiveToken(session.access_token);
+      setIsDrawerOpen(true);
 
     } catch (err) {
       setErrorLog(err.message);
-      fetchSlotsForDate(selectedDate); 
+      fetchSlotsForDate(selectedDate);
       setSelectedSlot(null);
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -154,7 +103,7 @@ export default function BookingClient({ venue, user }) {
         <h1 className="text-3xl font-black text-white tracking-tight uppercase mb-2">
           {venue.name}
         </h1>
-        <div className="flex items-center gap-2 text-brand-slate text-sm">
+        <div className="flex items-center gap-2 text-zinc-400 text-sm">
           <MapPin className="w-4 h-4 text-brand-emerald" />
           <span>{venue.address}</span>
         </div>
@@ -162,7 +111,7 @@ export default function BookingClient({ venue, user }) {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-mono font-bold tracking-wider text-brand-slate uppercase">1. Tentukan Titik Waktu</h3>
+          <h3 className="text-sm font-mono font-bold tracking-wider text-zinc-500 uppercase">1. Tentukan Titik Waktu</h3>
         </div>
         <DateCarousel 
           selectedDate={selectedDate} 
@@ -182,7 +131,7 @@ export default function BookingClient({ venue, user }) {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-mono font-bold tracking-wider text-brand-slate uppercase">2. Pilih Kapasitas (Jam)</h3>
+          <h3 className="text-sm font-mono font-bold tracking-wider text-zinc-500 uppercase">2. Pilih Kapasitas (Jam)</h3>
           {loadingSlots && <Loader2 className="w-4 h-4 animate-spin text-brand-emerald" />}
         </div>
         
@@ -201,35 +150,38 @@ export default function BookingClient({ venue, user }) {
 
       <div className="pt-6 border-t border-zinc-800">
         <button
-          onClick={handleLockAndCheckout}
-          disabled={!selectedSlot || isProcessing}
-          className={`w-full py-4 rounded-xl font-mono text-sm font-bold flex items-center justify-center gap-3 transition-all
+          onClick={handleOpenPaymentGate}
+          disabled={!selectedSlot || loadingSlots}
+          className={`w-full py-4 rounded-xl font-mono text-sm font-bold flex items-center justify-center gap-3 transition-all cursor-pointer
             ${!selectedSlot 
               ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' 
               : 'bg-brand-emerald text-background hover:bg-brand-emerald/90 hover:scale-[1.01] shadow-[0_0_20px_rgba(16,185,129,0.3)]'
             }`}
         >
-          {isProcessing ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>MENGAMANKAN JARINGAN...</span>
-            </>
-          ) : (
-            <>
-              <ShieldCheck className="w-5 h-5" />
-              <span>
-                {selectedSlot 
-                  ? `OTORISASI PEMBAYARAN - RP ${selectedSlot.price.toLocaleString('id-ID')}` 
-                  : 'PILIH SLOT TERLEBIH DAHULU'
-                }
-              </span>
-            </>
-          )}
+          <ShieldCheck className="w-5 h-5" />
+          <span>
+            {selectedSlot 
+              ? `BUKA KONFIRMASI PEMBAYARAN - RP ${selectedSlot.price.toLocaleString('id-ID')}` 
+              : 'PILIH SLOT TERLEBIH DAHULU'
+            }
+          </span>
         </button>
-        <p className="text-center text-xs text-brand-slate mt-3 font-mono">
-          MENEKAN TOMBOL AKAN MENGUNCI JADWAL SECARA EKSKLUSIF SELAMA 15 MENIT
+        <p className="text-center text-xs text-zinc-500 mt-3 font-mono">
+          MENEKAN TOMBOL AKAN MENGUNCI JADWAL SECARA EKSKLUSIF SELAMA 15 MENIT DI TAHAP BERIKUTNYA
         </p>
       </div>
+
+      {/* FIX SINKRONISASI KOMPONEN: Panggil Lapis Konfirmasi dengan menyertakan token otentikasi dinamis */}
+      <PaymentDrawer 
+        isOpen={isDrawerOpen}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          fetchSlotsForDate(selectedDate);
+        }}
+        selectedSlot={selectedSlot}
+        venueName={venue.name}
+        authToken={activeToken}
+      />
 
     </div>
   );
