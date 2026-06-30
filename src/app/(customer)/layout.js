@@ -6,19 +6,13 @@ export const dynamic = 'force-dynamic';
 
 export default async function CustomerLayout({ children }) {
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground font-sans">
-      
-      {/* Navigasi Global Terpadu (Menangani Otomatisasi Deteksi Lintas Portal Pelanggan & Mitra) */}
+    <div className="min-h-screen flex flex-col bg-zinc-950 text-white font-sans antialiased">
+      {/* Header otomatis memilah shortcut kembali ke dashboard jika user memiliki peran mitra */}
       <CustomerHeader />
-      
-      {/* Area Rute Render Konten Bisnis */}
-      <main className="flex-1">
+      <main className="flex-1 relative z-10">
         {children}
       </main>
-
-      {/* Komponen Kaki Halaman Umum */}
       <CustomerFooter />
-      
     </div>
   );
 }
