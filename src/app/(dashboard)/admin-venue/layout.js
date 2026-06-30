@@ -4,7 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
 import AdminVenueHeader from "../../../components/admin-venue/AdminVenueHeader";
 import DashboardFooter from "../../../components/dashboard/DashboardFooter";
-import { Clock, AlertTriangle } from "lucide-react";
+import { Clock, AlertTriangle, LogOut } from "lucide-react"; // Tambahkan LogOut
 
 export const dynamic = 'force-dynamic';
 
