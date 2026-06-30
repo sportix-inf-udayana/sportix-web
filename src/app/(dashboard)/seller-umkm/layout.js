@@ -1,6 +1,6 @@
+import React from "react";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { redirect } from "next/navigation";
 import UmkmHeader from "../../../components/umkm/UmkmHeader";
 import DashboardFooter from "../../../components/dashboard/DashboardFooter";
 
@@ -16,22 +16,29 @@ export default async function SellerUmkmLayout({ children }) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user || user.user_metadata?.role !== "UMKM_SELLER") {
-    redirect("/login");
-  }
+  const { data: store } = await supabase
+    .from("umkm_stores")
+    .select("status")
+    .eq("owner_id", user?.id)
+    .maybeSingle();
+
+  const isApproved = store?.status === "APPROVED";
 
   return (
-    <div className="bg-background text-foreground min-h-screen flex flex-col font-sans">
-      {/* Header Manajemen Merchant */}
-      <UmkmHeader user={user} />
-      
-      {/* Konten Produk & Pesanan Konsinyasi */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
-        {children}
-      </main>
-
-      {/* Footer Internal Dashboard Terpusat */}
-      <DashboardFooter />
+    <div className="min-h-screen bg-zinc-950 text-white flex flex-col font-sans relative">
+      {isApproved ? (
+        <>
+          <UmkmHeader />
+          <div className="flex-1 flex flex-col relative z-10">
+            <main className="flex-1 w-full">{children}</main>
+          </div>
+          <DashboardFooter />
+        </>
+      ) : (
+        <div className="flex-1 flex items-center justify-center bg-zinc-950 w-full relative z-20">
+          <div className="w-full max-w-xl">{children}</div>
+        </div>
+      )}
     </div>
   );
 }

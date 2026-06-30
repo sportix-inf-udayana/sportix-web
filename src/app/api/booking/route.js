@@ -13,10 +13,13 @@ export async function POST(request) {
 
     const { slotId, time, date } = await request.json();
 
-    // STEP 1: Ambil data tarif asli dari database master (Anti Parameter Tampering)
+    // STEP 1: Ambil status operasional slot terikat beserta relasi kepemilikan user reservasi aktif
     const { data: currentSlot, error: slotFetchErr } = await supabase
       .from("slots")
-      .select("price, field_id")
+      .select(`
+        price, field_id, status, reservation_id,
+        reservations ( id, user_id, status )
+      `)
       .eq("id", slotId)
       .single();
 
@@ -24,56 +27,77 @@ export async function POST(request) {
       return NextResponse.json({ message: "Slot operasional tidak ditemukan." }, { status: 404 });
     }
 
-    // STEP 2: FIX CORE LUBANG TOCTOU - Lakukan Penguncian Status Bersyarat secara Atomik
-    // Kita paksa melakukan update status hanya JIKA status saat ini bernilai 'AVAILABLE' di level database
-    const { data: lockedSlot, error: lockErr } = await supabase
-      .from("slots")
-      .update({ status: 'LOCKED' })
-      .eq("id", slotId)
-      .eq("status", "AVAILABLE") // Kunci utama penolak balapan data mikrodetik
-      .select();
+    const officialPrice = currentSlot.price;
+    let targetReservationId = currentSlot.reservation_id;
 
-    // Jika baris data yang terupdate kosong (length === 0), berarti user lain telah mendahului mengunci slot ini dalam fraksi milidetik yang sama
-    if (lockErr || !lockedSlot || lockedSlot.length === 0) {
+    // STEP 2: FIX CORE LUBANG TOCTOU & DEADLOCK - Terapkan Aturan Re-entrant Lock
+    const isLockedBySameUser = 
+      currentSlot.status === "LOCKED" && 
+      currentSlot.reservations?.user_id === user.id &&
+      currentSlot.reservations?.status === "PENDING";
+
+    if (currentSlot.status !== "AVAILABLE" && !isLockedBySameUser) {
       return NextResponse.json({ 
         success: false, 
-        message: "Gagal Mengunci Slot: Lapangan ini baru saja dipesan oleh pengguna lain. Silakan pilih jam sewa yang lain." 
+        message: "Jadwal sewa ini baru saja dipesan atau dikunci oleh atlet lain." 
       }, { status: 409 });
     }
 
-    const officialPrice = currentSlot.price;
+    if (!isLockedBySameUser) {
+      // Skenario A: Slot benar-benar kosong, lakukan penguncian bersyarat eksklusif
+      const { data: lockedSlot, error: lockErr } = await supabase
+        .from("slots")
+        .update({ status: 'LOCKED' })
+        .eq("id", slotId)
+        .eq("status", "AVAILABLE") 
+        .select();
 
-    // STEP 3: Buat Manifes Pemesanan Resmi setelah slot berhasil dikunci secara eksklusif
-    const { data: reservation, error: resError } = await supabase
-      .from("reservations")
-      .insert({
-        user_id: user.id,
-        field_id: currentSlot.field_id,
-        booking_date: date,
-        start_time: time,
-        end_time: time,
-        total_amount: officialPrice,
-        status: "PENDING"
-      })
-      .select()
-      .single();
+      if (lockErr || !lockedSlot || lockedSlot.length === 0) {
+        return NextResponse.json({ 
+          success: false, 
+          message: "Kondisi Balapan: Jadwal sewa ini telah diambil dalam fraksi milidetik oleh user lain." 
+        }, { status: 409 });
+      }
 
-    // Mekanisme pemulihan darurat jika penulisan manifes transaksi gagal
-    if (resError) {
-      await supabase.from("slots").update({ status: 'AVAILABLE' }).eq("id", slotId);
-      throw resError;
+      // Buat baris manifes transaksi baru
+      const { data: newReservation, error: resError } = await supabase
+        .from("reservations")
+        .insert({
+          user_id: user.id,
+          field_id: currentSlot.field_id,
+          booking_date: date,
+          start_time: time,
+          end_time: time,
+          total_amount: officialPrice,
+          status: "PENDING"
+        })
+        .select()
+        .single();
+
+      if (resError) {
+        await supabase.from("slots").update({ status: 'AVAILABLE', reservation_id: null }).eq("id", slotId);
+        throw resError;
+      }
+
+      targetReservationId = newReservation.id;
+      await supabase.from("slots").update({ reservation_id: targetReservationId }).eq("id", slotId);
+    } else {
+      // Skenario B: Pemilik kunci lama masuk kembali, perbarui waktu pembuatan untuk memperpanjang masa aktif
+      console.log(`[SPORTIX LOCKING]: User ${user.id} memicu re-entrant lock pada slot ${slotId}`);
+      await supabase
+        .from("reservations")
+        .update({ created_at: new Date().toISOString() })
+        .eq("id", targetReservationId);
     }
 
-    // Hubungkan ID reservasi baru ke dalam jangkar baris slot yang telah aman dikunci
-    await supabase.from("slots").update({ reservation_id: reservation.id }).eq("id", slotId);
-
-    // STEP 4: REST API Integrasi Midtrans Snap Gateway
+    // STEP 3: REST API Integrasi Midtrans Snap Gateway menggunakan ID Reservasi yang Valid
     const midtransServerKey = process.env.MIDTRANS_SERVER_KEY;
     if (!midtransServerKey) {
       return NextResponse.json({ message: "Kesalahan Konfigurasi Gateway Server." }, { status: 500 });
     }
 
-    const midtransOrderId = `REV-${reservation.id}`;
+    // Menggunakan timestamp dinamis pada order_id agar request pembaruan tidak ditolak sebagai duplicate order oleh Midtrans
+    const midtransOrderId = `REV-${targetReservationId}-${Date.now()}`;
     const midtransPayload = {
       transaction_details: {
         order_id: midtransOrderId,
@@ -103,12 +127,15 @@ export async function POST(request) {
     const midtransData = await midtransResponse.json();
 
     if (!midtransResponse.ok || !midtransData.token) {
-      await supabase.from("slots").update({ status: 'AVAILABLE', reservation_id: null }).eq("id", slotId);
-      await supabase.from("reservations").update({ status: 'FAILED_GATEWAY' }).eq("id", reservation.id);
+      if (!isLockedBySameUser) {
+        await supabase.from("slots").update({ status: 'AVAILABLE', reservation_id: null }).eq("id", slotId);
+        await supabase.from("reservations").update({ status: 'FAILED_GATEWAY' }).eq("id", targetReservationId);
+      }
       return NextResponse.json({ message: "Payment Gateway menolak pembuatan token transaksi." }, { status: 502 });
     }
 
-    await supabase.from("reservations").update({ payment_gateway_ref: midtransOrderId }).eq("id", reservation.id);
+    // Catat referensi order_id terbaru ke dalam database transaksi untuk dibaca oleh webhook callback
+    await supabase.from("reservations").update({ payment_gateway_ref: midtransOrderId }).eq("id", targetReservationId);
 
     return NextResponse.json({ payment_token: midtransData.token });
 
