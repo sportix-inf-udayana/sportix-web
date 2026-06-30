@@ -4,7 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
 import AdminVenueHeader from "../../../components/admin-venue/AdminVenueHeader";
 import DashboardFooter from "../../../components/dashboard/DashboardFooter";
-import { Clock, AlertTriangle, LogOut } from "lucide-react"; // Tambahkan LogOut
+import { Clock, AlertTriangle } from "lucide-react"; // FIX: Menghapus LogOut yang tidak terpakai
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +56,7 @@ export default async function AdminVenueLayout({ children }) {
     );
   }
 
-  // STATE 3: VERIFIED (Akses Penuh Diberikan)
+  // STATE 3: APPROVED (Akses Penuh Diberikan)
   return (
     <div className="bg-background text-foreground min-h-screen flex flex-col font-sans relative">
       <AdminVenueHeader venueName={venue.name} />

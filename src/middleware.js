@@ -27,10 +27,10 @@ export async function middleware(request) {
   const isApiRoute = url.pathname.startsWith("/api");
   const isPublicWebhook = url.pathname.startsWith("/api/payments/webhook") || url.pathname.startsWith("/api/cron");
 
-  // Rute Transaksional yang HARUS diproteksi ketat
   const isTransactionalRoute = url.pathname.startsWith("/checkout") || url.pathname.startsWith("/booking");
 
-  // Blokir Akses Tanpa Otentikasi
+  let finalResponse = supabaseResponse;
+
   if (!user && !isPublicWebhook) {
     if (isApiRoute) {
       return new NextResponse(
@@ -39,22 +39,20 @@ export async function middleware(request) {
       );
     }
     
-    // Auth-Gate: Arahkan ke login dengan membawa jejak URL
     if (isTransactionalRoute) {
       const callbackPath = encodeURIComponent(url.pathname + url.search);
       url.pathname = "/login";
       url.search = `?callback=${callbackPath}`;
-      return NextResponse.redirect(url);
-    }
-
-    // Rute dashboard terproteksi
-    if (url.pathname.startsWith("/super-admin") || 
-        url.pathname.startsWith("/admin-venue") || 
-        url.pathname.startsWith("/coach") || 
-        url.pathname.startsWith("/seller-umkm") ||
-        url.pathname.startsWith("/profile")) {
+      finalResponse = NextResponse.redirect(url);
+    } else if (
+      url.pathname.startsWith("/super-admin") || 
+      url.pathname.startsWith("/admin-venue") || 
+      url.pathname.startsWith("/coach") || 
+      url.pathname.startsWith("/seller-umkm") ||
+      url.pathname.startsWith("/profile")
+    ) {
       url.pathname = "/login";
-      return NextResponse.redirect(url);
+      finalResponse = NextResponse.redirect(url);
     }
   }
 
@@ -73,12 +71,21 @@ export async function middleware(request) {
       if (url.pathname.startsWith(route) && role !== requiredRole) {
         console.warn(`SECURITY ALERT: User ${user.id} (${role}) attempted to access ${route}`);
         url.pathname = "/"; 
-        return NextResponse.redirect(url);
+        finalResponse = NextResponse.redirect(url);
+        break; // Hentikan loop setelah menemukan violation
       }
     }
   }
 
-  return supabaseResponse;
+  // Senior Edge-Case: Jika redirect terjadi, pindahkan token/cookie terbaru yang mungkin di-refresh di atas 
+  // ke dalam response redirect yang baru agar auth state tidak terhapus.
+  if (finalResponse !== supabaseResponse) {
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      finalResponse.cookies.set(cookie.name, cookie.value, cookie.options);
+    });
+  }
+
+  return finalResponse;
 }
 
 export const config = {

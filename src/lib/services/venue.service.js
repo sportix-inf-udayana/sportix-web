@@ -16,7 +16,8 @@ export async function getVerifiedVenues(supabase) {
       id: v.id,
       name: v.name,
       location: v.address || "Bali, Indonesia",
-      image: "/public/image/venue-fallback.svg", 
+      // FIX: Hapus awalan '/public' karena Next.js mengekspos isi public secara langsung
+      image: "/image/venue-fallback.svg", 
       rating: 4.8, 
       price: "IDR 150,000 / Jam",
       sport: "Futsal",
