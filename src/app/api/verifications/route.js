@@ -4,7 +4,6 @@ import { getSupabaseAdmin } from "../../../lib/supabase";
 export async function POST(req) {
   const startTime = Date.now();
   try {
-    // FIX: Menggunakan service role administrative client untuk bypass pembatasan update RLS publik
     const supabase = getSupabaseAdmin();
     if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
 
@@ -36,21 +35,43 @@ export async function POST(req) {
       default: return NextResponse.json({ success: false, message: "Tipe entitas tidak valid." }, { status: 400 });
     }
 
-    const { data, error: updateErr } = await supabase
+    const { data: targetEntity, error: updateErr } = await supabase
       .from(targetTable)
       .update({ status: newStatus })
       .eq("id", entityId)
       .select()
       .single();
 
-    if (updateErr || !data) {
+    if (updateErr || !targetEntity) {
       console.error("Verification Update Error:", updateErr);
       return NextResponse.json({ success: false, message: `Gagal memperbarui status pada tabel ${targetTable}.` }, { status: 500 });
     }
 
+    // FIX LOGIKA BISNIS: Inisialisasi baris saldo kas awal 0 rupiah agar tidak memicu crash .single() di dashboard mitra
+    if (newStatus === 'APPROVED') {
+      const targetUserId = targetEntity.owner_id || targetEntity.user_id;
+      
+      if (targetUserId) {
+        const { data: existingBalance } = await supabase
+          .from("balances")
+          .select("id")
+          .eq("user_id", targetUserId)
+          .maybeSingle();
+
+        if (!existingBalance) {
+          await supabase.from("balances").insert({
+            user_id: targetUserId,
+            available_balance: 0,
+            pending_balance: 0
+          });
+          console.log(`[SPORTIX LEDGER]: Berhasil membuat dompet kas awal untuk user ${targetUserId}`);
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      message: `${entityType} berhasil di-${newStatus}.`,
+      message: `${entityType} berhasil di-${newStatus} beserta inisialisasi dompet kas terkait.`,
       executionMs: Date.now() - startTime
     });
 
