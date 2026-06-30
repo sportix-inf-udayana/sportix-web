@@ -19,7 +19,7 @@ export async function getUmkmCatalog(supabase) {
     const { data: products, error } = await supabase
       .from("umkm_products")
       .select(`
-        id, name, price, stock, description,
+        id, name, price, stock, description, image_url,
         umkm_stores!inner ( status )
       `)
       .eq("umkm_stores.status", "APPROVED")
@@ -35,7 +35,7 @@ export async function getUmkmCatalog(supabase) {
         price: p.price,
         stock: p.stock,
         desc: p.description || "Alat olahraga premium.",
-        image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=400"
+        image: p.image_url || "/image/product-fallback.svg"
       })) || [], 
       error: null 
     };
@@ -47,7 +47,6 @@ export async function getUmkmCatalog(supabase) {
 
 export async function getUserTicketHistory(supabase, userId) {
   try {
-    // FIX: Relasi skema baru (Reservations -> Fields -> Venues)
     const { data: tickets, error } = await supabase
       .from("reservations")
       .select(`

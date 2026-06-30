@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
-import { getSupabase } from "../../../../lib/supabase";
+import { getSupabaseUser } from "../../../../lib/supabase";
 
 export async function POST(req) {
   try {
-    const supabase = getSupabase();
-    if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
-
-    // Verifikasi Sesi JWT
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (!token) return new NextResponse("Unauthorized. Missing Token.", { status: 401 });
 
-    if (authError || !user) return new NextResponse("Unauthorized", { status: 401 });
+    // Hubungkan client dengan Bearer token yang valid agar RLS di database aktif
+    const supabase = getSupabaseUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) return new NextResponse("Unauthorized. Invalid JWT.", { status: 401 });
 
     const body = await req.json();
     const { amount, bankName, accountNumber } = body;
@@ -20,52 +21,55 @@ export async function POST(req) {
       return NextResponse.json({ success: false, message: "Payload penarikan tidak valid." }, { status: 400 });
     }
 
-    // Cegah Exploit Chaining (Race Condition & Over-Withdrawal)
-    // Cek apakah ada request penarikan yang masih PENDING. Jika ada, blokir!
-    const { data: existingPending, error: pendingErr } = await supabase
+    // Database RLS otomatis membatasi query ini hanya untuk user_id yang cocok dengan auth.uid() token
+    const { data: existingPending } = await supabase
       .from("withdrawal_logs")
       .select("id")
-      .eq("user_id", user.id)
       .eq("status", "PENDING")
       .limit(1);
 
     if (existingPending && existingPending.length > 0) {
       return NextResponse.json({ 
         success: false, 
-        message: "Anda masih memiliki pengajuan penarikan yang sedang diproses. Harap tunggu." 
+        message: "Anda masih memiliki pengajuan penarikan dana yang sedang diproses." 
       }, { status: 429 });
     }
 
-    // Tarik Saldo Aktual dari Tabel Balances (Single Source of Truth)
-    const { data: balanceData, error: balanceErr } = await supabase
+    // Pengambilan data saldo dilindungi secara otonom oleh RLS (Tidak memerlukan klausa manual .eq('user_id', user.id))
+    const { data: balanceData } = await supabase
       .from("balances")
       .select("available_balance")
-      .eq("user_id", user.id)
       .single();
 
     const actualBalance = balanceData?.available_balance || 0;
 
-    // VALIDASI MUTLAK: Tolak jika klien mencoba menarik lebih dari saldo aktual
     if (amount > actualBalance) {
-      console.warn(`[RED TEAM ALERT]: Percobaan eksploitasi over-withdrawal oleh user ${user.id}`);
+      console.warn(`[SECURITY WARN]: User ${user.id} mencoba menarik dana melebihi batas saldo riil.`);
       return NextResponse.json({ 
         success: false, 
-        message: "Saldo tidak mencukupi. Manipulasi payload terdeteksi dan diblokir." 
+        message: "Saldo tidak mencukupi untuk melakukan operasi penarikan." 
       }, { status: 403 });
     }
 
-    // Injeksi Data Pengajuan ke Log (Menunggu Approval Super Admin)
+    // Penyisipan data langsung mewarisi kepemilikan user_id via database default value (auth.uid())
     const { error: insertErr } = await supabase
       .from("withdrawal_logs")
       .insert({
-        user_id: user.id,
         amount: Number(amount),
         bank_name: bankName.trim(),
         account_number: accountNumber.trim(),
         status: "PENDING"
       });
 
-    if (insertErr) throw insertErr;
+    if (insertErr) {
+      if (insertErr.code === "23505") {
+        return NextResponse.json({ 
+          success: false, 
+          message: "Aktivitas transaksi mencurigakan terdeteksi. Request ganda diblokir sistem." 
+        }, { status: 409 });
+      }
+      throw insertErr;
+    }
 
     return NextResponse.json({
       success: true,

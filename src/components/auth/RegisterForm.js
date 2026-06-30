@@ -36,6 +36,10 @@ export default function RegisterForm() {
     setLoading(true);
     setError(null);
 
+    // FIX LAPISAN PROTEKSI: Memvalidasi muatan data menggunakan mekanisme daftar putih (Whitelist Validation)
+    const allowedRoles = ["CUSTOMER", "ADMIN_VENUE", "UMKM_SELLER", "COACH"];
+    const targetRole = allowedRoles.includes(formData.role) ? formData.role : "CUSTOMER";
+
     try {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
@@ -43,7 +47,7 @@ export default function RegisterForm() {
         options: {
           data: {
             full_name: formData.fullName,
-            role: formData.role, 
+            role: targetRole, // Hanya gunakan peran yang tervalidasi secara ketat
           },
         },
       });
@@ -51,7 +55,6 @@ export default function RegisterForm() {
       if (signUpError) throw signUpError;
 
       if (data?.user) {
-        // FIX: Hancurkan session instan untuk mematikan auto-login
         await supabase.auth.signOut();
         setSuccess(true);
         setTimeout(() => {
@@ -60,7 +63,7 @@ export default function RegisterForm() {
       }
     } catch (err) {
       console.error("Registration engine fault:", err);
-      const errorMessage = err?.message || err?.error_description || err?.msg || "Terjadi kegagalan sistem yang tidak diketahui.";
+      const errorMessage = err?.message || "Terjadi kegagalan sistem yang tidak diketahui.";
       setError(errorMessage);
     } finally {
       setLoading(false);

@@ -4,7 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
 import AdminVenueHeader from "../../../components/admin-venue/AdminVenueHeader";
 import DashboardFooter from "../../../components/dashboard/DashboardFooter";
-import { Clock, AlertTriangle } from "lucide-react"; // FIX: Menghapus LogOut yang tidak terpakai
+import { Clock, AlertTriangle, LogOut } from "lucide-react";
 
 export const dynamic = 'force-dynamic';
 
@@ -13,21 +13,19 @@ export default async function AdminVenueLayout({ children }) {
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { cookies: { getAll() { return cookieStore.getAll(); } } }
+  { cookies: { getAll() { return cookieStore.getAll(); } } }
   );
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) redirect("/login");
 
-  // Tarik status arena milik admin ini
   const { data: venue } = await supabase
     .from("venues")
     .select("id, name, status")
     .eq("owner_id", user.id)
     .single();
 
-  // STATE 1: Belum punya arena sama sekali
-  // Biarkan layout kosongan merender {children} (Halaman Onboarding)
+  // STATE 1: Belum punya arena sama sekali (Fase Onboarding)
   if (!venue) {
     return (
       <div className="bg-background text-foreground min-h-screen flex flex-col font-sans">
@@ -36,7 +34,7 @@ export default async function AdminVenueLayout({ children }) {
     );
   }
 
-  // STATE 2: Arena terdaftar, tapi status masih PENDING
+  // STATE 2: Arena terdaftar, tapi status masih PENDING_AUDIT (Resolusi Masalah Trapped)
   if (venue.status === "PENDING") {
     return (
       <div className="bg-background text-foreground min-h-screen flex flex-col items-center justify-center p-6 font-sans relative">
@@ -48,8 +46,28 @@ export default async function AdminVenueLayout({ children }) {
           <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
             Entitas arena <strong className="text-white">{venue.name}</strong> sedang dalam antrean audit kepatuhan oleh Super Admin. Akses sistem ditangguhkan hingga disetujui.
           </p>
-          <div className="text-micro font-mono bg-brand-amber/10 text-brand-amber px-4 py-2 rounded border border-brand-amber/20 inline-flex items-center gap-2 uppercase tracking-widest">
-            <AlertTriangle className="w-4 h-4" /> STATUS: PENDING_AUDIT
+          <div className="flex flex-col gap-4 items-center justify-center">
+            <div className="text-micro font-mono bg-brand-amber/10 text-brand-amber px-4 py-2 rounded border border-brand-amber/20 inline-flex items-center gap-2 uppercase tracking-widest">
+              <AlertTriangle className="w-4 h-4" /> STATUS: PENDING_AUDIT
+            </div>
+            
+            {/* Tombol Logout Darurat Klien via Server Action Terintegrasi / Sesi Manipulasi */}
+            <form action={async () => {
+              "use server";
+              const serverCookies = cookies();
+              const serverSupabase = createServerClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL,
+                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+                { cookies: { getAll() { return serverCookies.getAll(); }, setAll(cookiesToSet) { cookiesToSet.forEach(({ name, value, options }) => serverCookies.set(name, value, options)); } } }
+              );
+              await serverSupabase.auth.signOut();
+              redirect("/login");
+            }}>
+              <button type="submit" className="mt-4 flex items-center gap-2 px-4 py-2 text-xs font-mono font-bold text-red-400 hover:bg-red-500/10 rounded-md transition-all border border-red-500/20 cursor-pointer">
+                <LogOut className="w-3.5 h-3.5" />
+                <span>KELUAR DARI ANTRIAN</span>
+              </button>
+            </form>
           </div>
         </div>
       </div>

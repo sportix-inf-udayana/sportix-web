@@ -1,23 +1,23 @@
 import { NextResponse } from "next/server";
-import { getSupabase } from "../../../../lib/supabase";
+import { getSupabaseUser } from "../../../../lib/supabase";
 
 export async function POST(req) {
   const startTime = Date.now();
   try {
-    const supabase = getSupabase();
-    if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
-
-    // Otorisasi Pengguna Tingkat Server 
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (!token) return NextResponse.json({ success: false, message: "Missing Token" }, { status: 401 });
+
+    // Menggunakan Token-Bound Client agar RLS mencatat user_id secara otonom
+    const supabase = getSupabaseUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ success: false, message: "Akses Ditolak. Sesi otorisasi hilang." }, { status: 401 });
     }
 
     const body = await req.json();
-    const { items, deliveryAddress } = body; // items: [{ productId, quantity }]
+    const { items, deliveryAddress } = body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ success: false, message: "Keranjang belanja kosong." }, { status: 400 });
@@ -28,15 +28,13 @@ export async function POST(req) {
     const verifiedItemsForMidtrans = [];
     const ordersToInsert = [];
 
-    // SERVER-SIDE RE-CALCULATION & STOCK VERIFICATION 
+    // SERVER-SIDE VERIFICATION
     for (const item of items) {
       const { productId, quantity } = item;
-
       if (!productId || !quantity || quantity <= 0) {
         return NextResponse.json({ success: false, message: "Struktur item payload tidak valid." }, { status: 400 });
       }
 
-      // Tarik harga dan stok resmi langsung dari Database Master
       const { data: product, error: prodErr } = await supabase
         .from("umkm_products")
         .select("id, name, price, stock, store_id")
@@ -47,7 +45,6 @@ export async function POST(req) {
         return NextResponse.json({ success: false, message: `Produk dengan ID ${productId} tidak ditemukan.` }, { status: 404 });
       }
 
-      // Validasi Kecukupan Stok Fisik di Server
       if (product.stock < quantity) {
         return NextResponse.json({ 
           success: false, 
@@ -55,83 +52,92 @@ export async function POST(req) {
         }, { status: 409 });
       }
 
-      // Hitung total harga secara aman di server
       const itemSubtotal = Number(product.price) * parseInt(quantity, 10);
       totalGrossAmount += itemSubtotal;
 
-      // Siapkan payload untuk manifes manifes Midtrans
       verifiedItemsForMidtrans.push({
         id: product.id,
         price: Number(product.price),
         quantity: parseInt(quantity, 10),
-        name: product.name.substring(0, 50) // Batasan karakter nama Midtrans
+        name: product.name.substring(0, 50)
       });
 
-      // Siapkan array data untuk record tabel umkm_orders
       ordersToInsert.push({
         user_id: user.id,
         store_id: product.store_id,
         product_id: product.id,
         quantity: parseInt(quantity, 10),
         delivery_address: safeAddress,
-        status: "PENDING_PAYMENT", // Mengunci status hingga webhook settlement masuk
+        status: "PENDING_PAYMENT", 
         total_price: itemSubtotal
       });
     }
 
-    // INVENTORY LOCKING (Kurangi Stok Seketika)
+    // ATOMIC INVENTORY LOCKING LOOP
+    const executedDeductions = [];
     for (const orderItem of ordersToInsert) {
-      // Ambil stok teraktual kembali untuk mengantisipasi jeda balapan mikrodetik
-      const { data: currentProd } = await supabase.from("umkm_products").select("stock").eq("id", orderItem.product_id).single();
-      const newStock = currentProd.stock - orderItem.quantity;
+      const { data: currentProd, error: fetchErr } = await supabase
+        .from("umkm_products")
+        .select("stock")
+        .eq("id", orderItem.product_id)
+        .single();
 
+      if (fetchErr || currentProd.stock < orderItem.quantity) {
+        // Memicu mekanisme rollback untuk item yang telah keburu dikurangi sebelumnya
+        for (const rollbackItem of executedDeductions) {
+          const { data: rProd } = await supabase.from("umkm_products").select("stock").eq("id", rollbackItem.id).single();
+          await supabase.from("umkm_products").update({ stock: rProd.stock + rollbackItem.qty }).eq("id", rollbackItem.id);
+        }
+        return NextResponse.json({ success: false, message: "Terjadi gangguan konkurensi stok. Silakan coba lagi." }, { status: 409 });
+      }
+
+      const newStock = currentProd.stock - orderItem.quantity;
       const { error: stockDeductErr } = await supabase
         .from("umkm_products")
         .update({ stock: newStock })
         .eq("id", orderItem.product_id);
 
-      if (stockDeductErr) throw new StockDeductErr("Gagal mengunci stok komoditas.");
+      if (stockDeductErr) {
+        for (const rollbackItem of executedDeductions) {
+          const { data: rProd } = await supabase.from("umkm_products").select("stock").eq("id", rollbackItem.id).single();
+          await supabase.from("umkm_products").update({ stock: rProd.stock + rollbackItem.qty }).eq("id", rollbackItem.id);
+        }
+        throw new Error("Gagal mengunci stok komoditas olahraga.");
+      }
+
+      executedDeductions.push({ id: orderItem.product_id, qty: orderItem.quantity });
     }
 
-    // Injeksi Data Pesanan Terkonsolidasi ke Tabel Umkm Orders
     const { data: insertedOrders, error: orderInsertErr } = await supabase
       .from("umkm_orders")
       .insert(ordersToInsert)
       .select("id");
 
     if (orderInsertErr) {
-      // Rollback manual jika gagal insert order (Kembalikan stok barang)
-      for (const orderItem of ordersToInsert) {
-        const { data: currentProd } = await supabase.from("umkm_products").select("stock").eq("id", orderItem.product_id).single();
-        await supabase.from("umkm_products").update({ stock: currentProd.stock + orderItem.quantity }).eq("id", orderItem.product_id);
+      // Rollback terstruktur menggunakan array pelacak deduksi riil
+      for (const rollbackItem of executedDeductions) {
+        const { data: rProd } = await supabase.from("umkm_products").select("stock").eq("id", rollbackItem.id).single();
+        await supabase.from("umkm_products").update({ stock: rProd.stock + rollbackItem.qty }).eq("id", rollbackItem.id);
       }
       throw orderInsertErr;
     }
 
-    // Gunakan ID pesanan pertama sebagai jangkar referensi eksternal (External Reference ID)
     const primaryOrderId = insertedOrders[0].id;
     const midtransOrderId = `UMKM-${primaryOrderId}`;
 
-    // INTEGRASI REST API GATEWAY MIDTRANS SNAP (SERVER-TO-SERVER)
     const midtransServerKey = process.env.MIDTRANS_SERVER_KEY;
     if (!midtransServerKey) {
       return NextResponse.json({ success: false, message: "Kesalahan Konfigurasi Gateway Server." }, { status: 500 });
     }
 
     const midtransPayload = {
-      transaction_details: {
-        order_id: midtransOrderId,
-        gross_amount: totalGrossAmount
-      },
+      transaction_details: { order_id: midtransOrderId, gross_amount: totalGrossAmount },
       item_details: verifiedItemsForMidtrans,
-      customer_details: {
-        email: user.email,
-        first_name: user.user_metadata?.full_name || "Athlete Customer"
-      },
+      customer_details: { email: user.email, first_name: user.user_metadata?.full_name || "Athlete Customer" },
       expiry: {
         start_time: new Date().toISOString().replace("T", " ").substring(0, 19) + " +0800",
         unit: "minutes",
-        duration: 15 // Batas waktu pembayaran checkout UMKM disamakan 15 menit agar adil untuk stok
+        duration: 15
       }
     };
 
@@ -148,21 +154,15 @@ export async function POST(req) {
     const midtransData = await midtransResponse.json();
 
     if (!midtransResponse.ok || !midtransData.token) {
-      console.error("Midtrans Gate Refusal:", midtransData);
-      // Rollback stok jika token payment gateway ditolak
-      for (const orderItem of ordersToInsert) {
-        const { data: currentProd } = await supabase.from("umkm_products").select("stock").eq("id", orderItem.product_id).single();
-        await supabase.from("umkm_products").update({ stock: currentProd.stock + orderItem.quantity }).eq("id", orderItem.product_id);
+      for (const rollbackItem of executedDeductions) {
+        const { data: rProd } = await supabase.from("umkm_products").select("stock").eq("id", rollbackItem.id).single();
+        await supabase.from("umkm_products").update({ stock: rProd.stock + rollbackItem.qty }).eq("id", rollbackItem.id);
       }
       return NextResponse.json({ success: false, message: "Payment Gateway menolak pembuatan token transaksi." }, { status: 502 });
     }
 
-    // Perbarui seluruh order terkait dengan referensi token Midtrans Snap riil
     const orderUuids = insertedOrders.map(o => o.id);
-    await supabase
-      .from("umkm_orders")
-      .update({ payment_gateway_ref: midtransOrderId })
-      .in("id", orderUuids);
+    await supabase.from("umkm_orders").update({ payment_gateway_ref: midtransOrderId }).in("id", orderUuids);
 
     return NextResponse.json({
       success: true,

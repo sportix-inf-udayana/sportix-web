@@ -52,7 +52,6 @@ export async function getVenueSlots(supabase, venueId, targetDate) {
 
 export async function getGlobalFinancialMetrics(supabase) {
   try {
-    // Kalkulasi dilakukan secara paralel menggunakan Promise.all untuk optimasi performance
     const [volumeRes, forfeitedRes, refundRes, ledgerRes] = await Promise.all([
       supabase.from("ledger_transactions").select("amount").eq("transaction_type", "CREDIT"),
       supabase.from("reservations").select("*", { count: 'exact', head: true }).in("status", ["EXPIRED_PAID", "FORFEITED"]),
@@ -60,7 +59,14 @@ export async function getGlobalFinancialMetrics(supabase) {
       supabase.from("ledger_transactions").select("id, transaction_type, source, amount, created_at, user_id").order("created_at", { ascending: false }).limit(50)
     ]);
 
-    const totalVolume = volumeRes.data?.reduce((sum, tx) => sum + Number(tx.amount), 0) || 0;
+    if (volumeRes.error) throw volumeRes.error;
+    if (ledgerRes.error) throw ledgerRes.error;
+
+    // Defensively enforce safe integer parsing for financial calculation to avoid floating-point drift
+    const totalVolume = volumeRes.data?.reduce((sum, tx) => {
+      const parsedAmount = Math.floor(Number(tx.amount || 0));
+      return sum + (isNaN(parsedAmount) ? 0 : parsedAmount);
+    }, 0) || 0;
     
     return {
       totalVolume,
@@ -96,9 +102,9 @@ export async function getVenueReports(supabase, userId) {
     if (reportError) throw reportError;
 
     const totals = {
-      revenue: reports?.reduce((acc, curr) => acc + Number(curr.operational_revenue), 0) || 0,
-      forfeit: reports?.reduce((acc, curr) => acc + Number(curr.forfeited_revenue), 0) || 0,
-      noShows: reports?.reduce((acc, curr) => acc + Number(curr.total_no_shows), 0) || 0,
+      revenue: reports?.reduce((acc, curr) => acc + Math.floor(Number(curr.operational_revenue || 0)), 0) || 0,
+      forfeit: reports?.reduce((acc, curr) => acc + Math.floor(Number(curr.forfeited_revenue || 0)), 0) || 0,
+      noShows: reports?.reduce((acc, curr) => acc + Number(curr.total_no_shows || 0), 0) || 0,
     };
 
     return { venue, reports: reports || [], totals, error: null };

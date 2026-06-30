@@ -1,18 +1,17 @@
-import { getSupabase } from "../../../lib/supabase";
+import { getSupabaseAdmin } from "../../../lib/supabase";
 import { NextResponse } from "next/server";
 
-// Endpoint ini harus dipanggil oleh Vercel Cron setiap 1 menit
 export async function POST(req) {
   try {
-    // Validasi Secret Key untuk memastikan panggilan berasal dari Vercel/Sistem Internal
-    const authHeader = req.headers.get("authorization");
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    // FIX SINKRONISASI: Menyamakan penangkapan header kunci rahasia dengan berkas middleware.js
+    const cronSecret = req.headers.get("x-cron-secret");
+    if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+      return NextResponse.json({ success: false, message: "Unauthorized. Secret Mismatch." }, { status: 401 });
     }
 
-    const supabase = getSupabase();
+    // Menggunakan admin client untuk memastikan fungsi sistem rpc memiliki wewenang penuh mengeksekusi denda
+    const supabase = getSupabaseAdmin();
 
-    // Fungsi 'enforce_strict_forfeits' menangani logika denda 100% dan rilis slot
     const { error } = await supabase.rpc("enforce_strict_forfeits", {
       current_utc_time: new Date().toISOString(),
     });
