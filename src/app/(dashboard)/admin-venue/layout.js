@@ -34,7 +34,7 @@ export default async function AdminVenueLayout({ children }) {
     );
   }
 
-  // STATE 2: Arena terdaftar, tapi status masih PENDING_AUDIT (Resolusi Masalah Trapped)
+  // STATE 2: Arena terdaftar, tapi status masih PENDING_AUDIT
   if (venue.status === "PENDING") {
     return (
       <div className="bg-background text-foreground min-h-screen flex flex-col items-center justify-center p-6 font-sans relative">
