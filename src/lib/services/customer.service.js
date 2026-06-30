@@ -28,7 +28,7 @@ export async function getUmkmCatalog(supabase) {
 
     if (error) throw error;
 
-    // Transformasi Fallback Mapping untuk UI
+    // Transformasi Fallback Mapping untuk UI Katalog
     const liveProducts = products?.map(p => ({
       id: p.id,
       name: p.name,
@@ -47,6 +47,8 @@ export async function getUmkmCatalog(supabase) {
 
 export async function getUserTicketHistory(supabase, userId) {
   try {
+    // FIX: Menggunakan arsitektur relasional skema baru 
+    // reservations -> fields -> venues
     const { data: tickets, error } = await supabase
       .from("reservations")
       .select(`
@@ -55,7 +57,12 @@ export async function getUserTicketHistory(supabase, userId) {
         barcode_token, 
         booking_date, 
         start_time,
-        slots ( price, time, venues ( name ) )
+        end_time,
+        total_amount,
+        fields (
+          name,
+          venues ( name, address )
+        )
       `)
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
