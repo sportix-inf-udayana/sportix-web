@@ -28,17 +28,17 @@ export async function getUmkmCatalog(supabase) {
 
     if (error) throw error;
 
-    // Transformasi Fallback Mapping untuk UI Katalog
-    const liveProducts = products?.map(p => ({
-      id: p.id,
-      name: p.name,
-      price: p.price,
-      stock: p.stock,
-      desc: p.description || "Alat olahraga premium.",
-      image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=400"
-    })) || [];
-
-    return { data: liveProducts, error: null };
+    return { 
+      data: products?.map(p => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        stock: p.stock,
+        desc: p.description || "Alat olahraga premium.",
+        image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=400"
+      })) || [], 
+      error: null 
+    };
   } catch (error) {
     console.error("UMKM Catalog Fetch Error:", error);
     return { data: [], error };
@@ -47,32 +47,23 @@ export async function getUmkmCatalog(supabase) {
 
 export async function getUserTicketHistory(supabase, userId) {
   try {
-    // FIX: Menggunakan arsitektur relasional skema baru 
-    // reservations -> fields -> venues
+    // FIX: Relasi skema baru (Reservations -> Fields -> Venues)
     const { data: tickets, error } = await supabase
       .from("reservations")
       .select(`
-        id, 
-        status, 
-        barcode_token, 
-        booking_date, 
-        start_time,
-        end_time,
-        total_amount,
-        fields (
-          name,
-          venues ( name, address )
-        )
+        id, status, barcode_token, booking_date, start_time, total_amount,
+        fields ( name, venues ( name ) )
       `)
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
-    const activeTickets = tickets?.filter(t => t.status === "CONFIRMED") || [];
-    
     return { 
-      data: { tickets: tickets || [], activeTickets }, 
+      data: { 
+        tickets: tickets || [], 
+        activeTickets: tickets?.filter(t => t.status === "CONFIRMED") || [] 
+      }, 
       error: null 
     };
   } catch (error) {

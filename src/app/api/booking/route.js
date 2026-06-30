@@ -1,114 +1,54 @@
-import { getSupabase } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
 
-export async function POST(req) {
-  const startTime = Date.now();
+export async function POST(request) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY // Gunakan service role untuk bypass RLS saat booking
+  );
+
   try {
-    const supabase = getSupabase();
-    if (!supabase) {
-      return new Response(JSON.stringify({ success: false, message: "Fatal: Database connection unavailable." }), { status: 503 });
-    }
+    const { slotId, time, date, price } = await request.json();
+    const authHeader = request.headers.get("Authorization");
+    const token = authHeader?.split(" ")[1];
 
-    const authHeader = req.headers.get('Authorization');
-    let token;
-    if (authHeader && authHeader.startsWith('Bearer ')) token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const { data: { user }, error: authError } = token ? await supabase.auth.getUser(token) : await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ success: false, message: "Akses ditolak. JWT hilang atau dimanipulasi." }), { status: 401 });
-    }
-
-    const body = await req.json();
-    const { slotId, time, date, price } = body;
-
-    if (!slotId || !time || !date) {
-      return new Response(JSON.stringify({ success: false, message: "Parameter payload tidak lengkap." }), { status: 400 });
-    }
-
-    const bookingPrice = Number(price);
-    const lockExpiry = new Date(Date.now() + 15 * 60000).toISOString();
-
-    // Kunci Secara Fisik (Atomic Lock)
-    const { data: updatedSlots, error: lockError } = await supabase
+    // 1. Validasi slot eksklusif (Cek status)
+    const { data: slot, error: slotError } = await supabase
       .from("slots")
-      .update({ status: "LOCKED", locked_until: lockExpiry })
+      .select("id, status, field_id")
       .eq("id", slotId)
-      .eq("status", "AVAILABLE")
-      .select();
+      .single();
 
-    if (lockError || !updatedSlots || updatedSlots.length === 0) {
-      return new Response(JSON.stringify({ success: false, message: "Conflict: Slot telah dikunci proses lain." }), { status: 409 });
+    if (slotError || slot.status !== 'AVAILABLE') {
+      return NextResponse.json({ message: "Slot tidak tersedia atau sudah dipesan." }, { status: 409 });
     }
 
-    // Injeksi Transaksi PENDING ke Database
+    // 2. Transaksi: Buat Reservasi & Lock Slot
     const { data: reservation, error: resError } = await supabase
       .from("reservations")
       .insert({
         user_id: user.id,
-        field_id: slotId, 
+        field_id: slot.field_id,
         booking_date: date,
         start_time: time,
-        end_time: `${parseInt(time.split(":")[0]) + 1}:00`, 
-        total_amount: bookingPrice,
-        status: "PENDING",
-        payment_method: "MIDTRANS_FULL"
+        end_time: time, // Sesuaikan logika durasi
+        total_amount: price,
+        status: "PENDING"
       })
       .select()
       .single();
 
-    if (resError) {
-      await supabase.from("slots").update({ status: "AVAILABLE" }).eq("id", slotId);
-      throw resError;
-    }
+    if (resError) throw resError;
 
-    // NEGOSIASI TOKEN MIDTRANS SISI SERVER (Server-to-Server)
-    const midtransServerKey = process.env.MIDTRANS_SERVER_KEY;
-    if (!midtransServerKey) throw new Error("Kunci server Midtrans tidak ditemukan di environment.");
-    
-    // Otentikasi Basic Base64 (Standar Midtrans)
-    const authString = Buffer.from(`${midtransServerKey}:`).toString('base64');
+    await supabase.from("slots").update({ status: 'LOCKED', reservation_id: reservation.id }).eq("id", slotId);
 
-    const midtransResponse = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${authString}`
-      },
-      body: JSON.stringify({
-        transaction_details: {
-          order_id: reservation.id, // ID Reservasi Supabase menjadi acuan tunggal Midtrans
-          gross_amount: bookingPrice
-        },
-        customer_details: {
-          email: user.email,
-          first_name: user.user_metadata?.full_name || "Pelanggan",
-        }
-      })
-    });
+    // 3. Integrasi Midtrans di sini (Simulasi token)
+    return NextResponse.json({ payment_token: "MOCK_TOKEN_MIDTRANS_123" });
 
-    const snapData = await midtransResponse.json();
-
-    if (!midtransResponse.ok) {
-      // Jika Midtrans menolak, lepaskan kembali gembok database
-      await supabase.from("slots").update({ status: "AVAILABLE" }).eq("id", slotId);
-      await supabase.from("reservations").delete().eq("id", reservation.id);
-      throw new Error(`Midtrans API Error: ${snapData.error_messages?.[0] || 'Unknown Error'}`);
-    }
-
-    // Update Slot dengan Reservation ID untuk melacak kepemilikan
-    await supabase.from("slots").update({ reservation_id: reservation.id }).eq("id", slotId);
-
-    // Pengembalian Sukses beserta Token Snap
-    return new Response(JSON.stringify({
-      success: true,
-      reservationId: reservation.id,
-      payment_token: snapData.token, // INI YANG DIBUTUHKAN FRONTEND
-      executionMs: Date.now() - startTime
-    }), { status: 200, headers: { "Content-Type": "application/json" } });
-
-  } catch (error) {
-    console.error("Critical Backend Error:", error);
-    return new Response(JSON.stringify({ success: false, message: error.message }), { status: 500 });
+  } catch (err) {
+    return NextResponse.json({ message: err.message }, { status: 500 });
   }
 }
