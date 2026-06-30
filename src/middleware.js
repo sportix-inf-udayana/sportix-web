@@ -25,9 +25,22 @@ export async function middleware(request) {
   const url = request.nextUrl.clone();
   
   const isApiRoute = url.pathname.startsWith("/api");
-  const isPublicWebhook = url.pathname.startsWith("/api/payments/webhook") || url.pathname.startsWith("/api/cron");
-
+  const isCronRoute = url.pathname.startsWith("/api/cron");
+  const isPublicWebhook = url.pathname.startsWith("/api/payments/webhook");
   const isTransactionalRoute = url.pathname.startsWith("/checkout") || url.pathname.startsWith("/booking");
+
+  // PROTEKSI TERMINAL CRON: Menepis serangan DoS manipulasi waktu sewa lapangan
+  if (isCronRoute) {
+    const cronSecret = request.headers.get("x-cron-secret");
+    if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+      console.warn(`[SECURITY ALERT]: Percobaan pemicuan ilegal fungsi otomatisasi cron dari IP luar.`);
+      return new NextResponse(
+        JSON.stringify({ success: false, message: "Forbidden. Invalid Cron Secret Key Signature." }),
+        { status: 403, headers: { "content-type": "application/json" } }
+      );
+    }
+    return supabaseResponse;
+  }
 
   let finalResponse = supabaseResponse;
 
@@ -56,29 +69,37 @@ export async function middleware(request) {
     }
   }
 
-  // RBAC (Role-Based Access Control)
+  // PENEGAKAN RBAC GRANULAR: Menyediakan jalur logis untuk interaksi konsumen (Customer Loop)
   if (user) {
     const role = user.user_metadata?.role || 'CUSTOMER';
 
-    const roleMap = {
-      "/super-admin": "SUPER_ADMIN",
-      "/admin-venue": "ADMIN_VENUE",
-      "/coach": "COACH",
-      "/seller-umkm": "UMKM_SELLER"
-    };
+    const accessRules = [
+      { pattern: /^\/(super-admin|api\/verifications|api\/withdrawals(?!Layout|\/request))/, required: "SUPER_ADMIN" },
+      { pattern: /^\/(admin-venue|api\/slots\/manage|api\/scan)/, required: "ADMIN_VENUE" },
+      
+      // Menggunakan teknik Negative Lookahead untuk mengecualikan API pencarian/pendaftaran umum pelatih
+      { pattern: /^\/(coach|api\/coaches\/(?!list|search|view))/, required: "COACH" },
+      
+      // Menggunakan teknik Negative Lookahead untuk memberikan hak akses transaksi belanja bagi akun pembeli
+      { pattern: /^\/(seller-umkm|api\/umkm\/(?!checkout|catalog|products\/list))/, required: "UMKM_SELLER" }
+    ];
 
-    for (const [route, requiredRole] of Object.entries(roleMap)) {
-      if (url.pathname.startsWith(route) && role !== requiredRole) {
-        console.warn(`SECURITY ALERT: User ${user.id} (${role}) attempted to access ${route}`);
+    for (const rule of accessRules) {
+      if (rule.pattern.test(url.pathname) && role !== rule.required) {
+        console.warn(`SECURITY ALERT: Pengguna ${user.id} dengan role ${role} mencoba mengakses rute terisolasi ${url.pathname}`);
+        if (isApiRoute) {
+          return new NextResponse(
+            JSON.stringify({ success: false, message: "Forbidden. Hak akses peran Anda tidak memadai." }),
+            { status: 403, headers: { "content-type": "application/json" } }
+          );
+        }
         url.pathname = "/"; 
         finalResponse = NextResponse.redirect(url);
-        break; // Hentikan loop setelah menemukan violation
+        break;
       }
     }
   }
 
-  // Senior Edge-Case: Jika redirect terjadi, pindahkan token/cookie terbaru yang mungkin di-refresh di atas 
-  // ke dalam response redirect yang baru agar auth state tidak terhapus.
   if (finalResponse !== supabaseResponse) {
     supabaseResponse.cookies.getAll().forEach((cookie) => {
       finalResponse.cookies.set(cookie.name, cookie.value, cookie.options);

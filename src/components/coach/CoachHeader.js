@@ -2,11 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
-import { Briefcase, Truck, Layers, LogOut, User } from "lucide-react";
+import { Award, Calendar, Wallet, LogOut, User } from "lucide-react";
 
-export default function UmkmHeader({ activeRoute }) {
+export default function CoachHeader() {
+  const pathname = usePathname();
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState(null);
   
@@ -31,14 +32,14 @@ export default function UmkmHeader({ activeRoute }) {
     <div className="border-b border-zinc-800 bg-surface-elevated sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
         
-        {/* Identitas Brand UMKM */}
+        {/* Identitas Brand Coach */}
         <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-start">
-          <div className="w-8 h-8 rounded bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
-            <Briefcase className="w-4 h-4" />
+          <div className="w-8 h-8 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+            <Award className="w-4 h-4" />
           </div>
           <div>
-            <span className="text-micro font-mono text-zinc-500 block leading-none">MERCHANT PORTAL</span>
-            <h2 className="text-base font-black text-white font-display">UMKM Seller Portal</h2>
+            <span className="text-micro font-mono text-zinc-500 block leading-none">INSTRUCTOR HUB</span>
+            <h2 className="text-base font-black text-white font-display">Coach Strategy Console</h2>
           </div>
         </div>
 
@@ -47,38 +48,38 @@ export default function UmkmHeader({ activeRoute }) {
           
           <div className="flex bg-surface border border-zinc-800/80 p-1 rounded-lg w-full sm:w-auto overflow-x-auto scrollbar-none">
             <Link 
-              href="/seller-umkm/products"
+              href="/coach/schedule"
               className={`px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap flex-1 sm:flex-none ${
-                activeRoute === 'products' 
+                pathname.includes('/schedule') 
                   ? 'bg-surface-hover text-white border border-zinc-800 shadow-sm' 
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
-              <Layers className={`w-3.5 h-3.5 ${activeRoute === 'products' ? 'text-purple-400' : ''}`} />
-              <span>INVENTORY MGR</span>
+              <Calendar className={`w-3.5 h-3.5 ${pathname.includes('/schedule') ? 'text-brand-emerald' : ''}`} />
+              <span>SCHEDULE MATRIX</span>
             </Link>
             <Link 
-              href="/seller-umkm/orders"
+              href="/coach/wallet"
               className={`px-4 py-1.5 rounded-md text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap flex-1 sm:flex-none ${
-                activeRoute === 'orders' 
+                pathname.includes('/wallet') 
                   ? 'bg-surface-hover text-white border border-zinc-800 shadow-sm' 
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
-              <Truck className={`w-3.5 h-3.5 ${activeRoute === 'orders' ? 'text-purple-400' : ''}`} />
-              <span>SHIPMENT ORDERS</span>
+              <Wallet className={`w-3.5 h-3.5 ${pathname.includes('/wallet') ? 'text-brand-emerald' : ''}`} />
+              <span>SALDO & WALLET</span>
             </Link>
           </div>
 
           {/* Sektor Profil & Logout */}
           <div className="flex items-center gap-3 pl-0 sm:pl-4 border-t sm:border-t-0 sm:border-l border-zinc-800/80 pt-4 sm:pt-0 w-full sm:w-auto justify-between sm:justify-start">
             <Link href="/profile" className="flex items-center gap-2 group cursor-pointer">
-              <div className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:border-purple-500/50 transition-colors">
-                <User className="w-4 h-4 text-zinc-400 group-hover:text-purple-400 transition-colors" />
+              <div className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:border-emerald-500/50 transition-colors">
+                <User className="w-4 h-4 text-zinc-400 group-hover:text-emerald-400 transition-colors" />
               </div>
               <div className="text-left">
-                <span className="text-micro font-mono text-zinc-500 block leading-none uppercase">MERCHANT</span>
-                <span className="text-xs font-bold text-white max-w-[120px] truncate block group-hover:text-purple-400 transition-colors">
+                <span className="text-micro font-mono text-zinc-500 block leading-none uppercase">OFFICIAL COACH</span>
+                <span className="text-xs font-bold text-white max-w-[120px] truncate block group-hover:text-emerald-400 transition-colors">
                   {currentUser?.user_metadata?.full_name || "Memuat..."}
                 </span>
               </div>
@@ -87,7 +88,7 @@ export default function UmkmHeader({ activeRoute }) {
             <button 
               onClick={handleLogout}
               className="bg-red-950/20 hover:bg-red-900/60 border border-red-500/20 text-red-400 p-2 rounded-lg text-xs font-mono transition-all cursor-pointer flex items-center justify-center"
-              title="Akhiri Sesi Jualan"
+              title="Akhiri Sesi Mengajar"
             >
               <LogOut className="w-4 h-4" />
             </button>

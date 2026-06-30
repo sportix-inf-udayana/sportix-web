@@ -1,16 +1,14 @@
 export async function getUmkmStoreAndProducts(supabase, userId) {
   try {
-    // Ambil data toko
     const { data: store, error: storeError } = await supabase
       .from("umkm_stores")
       .select("id, name, status, venues(name)")
       .eq("owner_id", userId)
       .single();
 
-    if (storeError) throw storeError;
+    if (storeError && storeError.code !== "PGRST116") throw storeError; 
     if (!store) return { data: { store: null, products: [] }, error: null };
 
-    // Ambil produk berdasarkan store_id
     const { data: products, error: productsError } = await supabase
       .from("umkm_products")
       .select("*")
@@ -31,17 +29,15 @@ export async function getUmkmStoreAndProducts(supabase, userId) {
 
 export async function getUmkmOrders(supabase, userId) {
   try {
-    // Ambil data toko
     const { data: store, error: storeError } = await supabase
       .from("umkm_stores")
       .select("id")
       .eq("owner_id", userId)
       .single();
 
-    if (storeError) throw storeError;
+    if (storeError && storeError.code !== "PGRST116") throw storeError;
     if (!store) return { data: { store: null, orders: [] }, error: null };
 
-    // Ambil pesanan toko
     const { data: orders, error: ordersError } = await supabase
       .from("umkm_orders")
       .select(`

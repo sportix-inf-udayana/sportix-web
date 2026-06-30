@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { getSupabase } from "../../../lib/supabase";
+import { getSupabaseUser } from "../../../lib/supabase";
 
 export async function POST(req) {
   try {
-    const supabase = getSupabase();
-    if (!supabase) throw new Error("Database offline.");
-
-    // Verifikasi Kriptografi Lapis 2
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (!token) return NextResponse.json({ success: false, message: "Missing Token" }, { status: 401 });
+
+    // FIX: Alirkan sesi otentikasi Super Admin ke PostgreSQL lewat Token-Bound Client
+    const supabase = getSupabaseUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user || user.user_metadata?.role !== 'SUPER_ADMIN') {
       return new NextResponse(JSON.stringify({ 
@@ -24,12 +24,10 @@ export async function POST(req) {
       return new NextResponse(JSON.stringify({ error: "Payload tidak valid." }), { status: 400 });
     }
 
-    // Ambil data pengajuan penarikan
     const { data: withdrawal, error: fetchErr } = await supabase
       .from('withdrawal_logs')
       .select('*')
       .eq('id', withdrawalId)
-      .eq('status', 'PENDING') // Hanya yang pending yang boleh diproses
       .single();
 
     if (fetchErr || !withdrawal) {
@@ -37,25 +35,30 @@ export async function POST(req) {
     }
 
     if (action === 'REJECT') {
-      await supabase
+      const { data: updatedReject, error: rejectErr } = await supabase
         .from('withdrawal_logs')
         .update({ status: 'REJECTED', resolved_by: user.id })
-        .eq('id', withdrawalId);
-        
+        .eq('id', withdrawalId)
+        .eq('status', 'PENDING') 
+        .select();
+
+      if (rejectErr || !updatedReject || updatedReject.length === 0) {
+        return new NextResponse(JSON.stringify({ error: "Transaksi telah kedaluwarsa atau diubah agen lain." }), { status: 409 });
+      }
       return NextResponse.json({ success: true, message: "Penarikan ditolak." });
     }
 
-    // LOGIKA INTI: APPROVAL & DOUBLE-ENTRY LEDGER ENFORCEMENT
-    // Jika disetujui, JANGAN mengubah saldo tabel 'balances' secara manual!
-    // Suntikkan ke ledger, biarkan PostgreSQL Trigger yang bekerja secara presisi (Imutabilitas Data Finansial).
-    const { error: updateErr } = await supabase
+    const { data: updatedLog, error: updateErr } = await supabase
       .from('withdrawal_logs')
       .update({ status: 'APPROVED', resolved_by: user.id })
-      .eq('id', withdrawalId);
+      .eq('id', withdrawalId)
+      .eq('status', 'PENDING') 
+      .select();
 
-    if (updateErr) throw updateErr;
+    if (updateErr || !updatedLog || updatedLog.length === 0) {
+      return new NextResponse(JSON.stringify({ error: "Konflik Konkurensi: Transaksi ini telah berhasil dieksekusi sebelumnya." }), { status: 409 });
+    }
 
-    // Memasukkan entri DEBIT ke buku besar. Trigger 'process_ledger_balance' akan memotong saldo otomatis.
     const { error: ledgerErr } = await supabase
       .from('ledger_transactions')
       .insert({

@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { getSupabase } from "../../../lib/supabase";
+import { getSupabaseUser } from "../../../lib/supabase";
 
 export async function POST(req) {
   try {
-    const supabase = getSupabase();
-    if (!supabase) throw new Error("Database offline.");
-
-    // Otorisasi Mutlak: Penegakan Hak Akses UMKM Seller
     const authHeader = req.headers.get('Authorization');
     const token = authHeader ? authHeader.replace('Bearer ', '') : null;
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (!token) return new NextResponse(JSON.stringify({ error: "Missing Token" }), { status: 401 });
+
+    // FIX: Menggunakan token-bound client agar query tidak diblokir oleh RLS database
+    const supabase = getSupabaseUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user || user.user_metadata?.role !== 'UMKM_SELLER') {
       return new NextResponse(JSON.stringify({ 
@@ -25,7 +25,6 @@ export async function POST(req) {
       return new NextResponse(JSON.stringify({ error: "Parameter nama, harga, dan stok wajib diisi." }), { status: 400 });
     }
 
-    // Cegah Injeksi Lintas Toko (Cross-Store Injection)
     const { data: store, error: storeErr } = await supabase
       .from('umkm_stores')
       .select('id, status')
@@ -40,7 +39,6 @@ export async function POST(req) {
       return new NextResponse(JSON.stringify({ error: "Operasi ditolak. Toko Anda belum disetujui oleh Super Admin." }), { status: 403 });
     }
 
-    // Eksekusi Penambahan Katalog dengan Constraint Fisik Database
     const { data: newProduct, error: insertErr } = await supabase
       .from('umkm_products')
       .insert({
@@ -48,7 +46,7 @@ export async function POST(req) {
         name: name.trim(),
         description: description?.trim() || "",
         price: Number(price),
-        stock: Math.max(0, parseInt(stock, 10)) // Cegah stok negatif
+        stock: Math.max(0, parseInt(stock, 10))
       })
       .select()
       .single();

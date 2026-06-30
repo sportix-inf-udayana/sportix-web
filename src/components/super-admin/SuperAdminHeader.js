@@ -17,8 +17,8 @@ export default function SuperAdminHeader({ user }) {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
     router.refresh();
+    router.push("/login");
   };
 
   return (
@@ -65,17 +65,17 @@ export default function SuperAdminHeader({ user }) {
 
           {/* Profil Admin & Tombol Keluar */}
           <div className="flex items-center gap-3 pl-0 sm:pl-4 border-t sm:border-t-0 sm:border-l border-zinc-800/80 pt-4 sm:pt-0 w-full sm:w-auto justify-between sm:justify-start">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center">
-                <User className="w-4 h-4 text-zinc-400" />
+            <Link href="/profile" className="flex items-center gap-2 group cursor-pointer">
+              <div className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:border-red-500/50 transition-colors">
+                <User className="w-4 h-4 text-zinc-400 group-hover:text-red-400 transition-colors" />
               </div>
               <div className="text-left">
                 <span className="text-micro font-mono text-zinc-500 block leading-none">ROOT ACCESS</span>
-                <span className="text-xs font-bold text-white max-w-[120px] truncate block">
+                <span className="text-xs font-bold text-white max-w-[120px] truncate block group-hover:text-red-400 transition-colors">
                   {user?.user_metadata?.full_name || "Super Admin"}
                 </span>
               </div>
-            </div>
+            </Link>
             
             <button 
               onClick={handleLogout}

@@ -17,7 +17,6 @@ export default function AdminVenueHeader({ venueName = "Venue" }) {
   );
 
   useEffect(() => {
-    // Tarik session secara mandiri agar tidak bergantung pada props dari layout
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setCurrentUser(data.user);
     });
@@ -25,8 +24,8 @@ export default function AdminVenueHeader({ venueName = "Venue" }) {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
     router.refresh();
+    router.push("/login");
   };
 
   return (
@@ -87,17 +86,17 @@ export default function AdminVenueHeader({ venueName = "Venue" }) {
 
           {/* Sektor Profil & Logout */}
           <div className="flex items-center gap-3 pl-0 md:pl-4 border-t md:border-t-0 md:border-l border-zinc-800/80 pt-4 md:pt-0 w-full md:w-auto justify-between md:justify-start">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center">
-                <User className="w-4 h-4 text-zinc-400" />
+            <Link href="/profile" className="flex items-center gap-2 group cursor-pointer">
+              <div className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:border-blue-500/50 transition-colors">
+                <User className="w-4 h-4 text-zinc-400 group-hover:text-blue-400 transition-colors" />
               </div>
               <div className="text-left">
                 <span className="text-micro font-mono text-zinc-500 block leading-none uppercase">VENUE ADMIN</span>
-                <span className="text-xs font-bold text-white max-w-[120px] truncate block">
+                <span className="text-xs font-bold text-white max-w-[120px] truncate block group-hover:text-blue-400 transition-colors">
                   {currentUser?.user_metadata?.full_name || "Memuat..."}
                 </span>
               </div>
-            </div>
+            </Link>
             
             <button 
               onClick={handleLogout}

@@ -1,18 +1,20 @@
-import { getSupabase } from "../../../lib/supabase";
+import { getSupabaseUser } from "../../../lib/supabase";
 
 export async function POST(req) {
   const startTime = Date.now();
   try {
-    const supabase = getSupabase();
-    if (!supabase) return new Response("Service Unavailable", { status: 503 });
+    const authHeader = req.headers.get('Authorization');
+    const token = authHeader ? authHeader.replace('Bearer ', '') : null;
+    if (!token) return new Response("Unauthorized. Missing Token.", { status: 401 });
 
-    // Otorisasi Mutlak: Harus login sebagai Admin Venue
+    // FIX: Eliminasi god-mode client untuk mencegah eksploitasi bypass hak kepemilikan arena
+    const supabase = getSupabaseUser(token);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return new Response("Unauthorized", { status: 401 });
 
     const { data: adminUser } = await supabase.from("users").select("role").eq("id", user.id).single();
     if (!adminUser || adminUser.role !== 'ADMIN_VENUE') {
-      return new Response(JSON.stringify({ success: false, message: "Forbidden. Hanya Admin Venue yang dapat melakukan pemindaian." }), { status: 403 });
+      return new Response(JSON.stringify({ success: false, message: "Forbidden." }), { status: 403 });
     }
 
     const body = await req.json();
@@ -22,7 +24,6 @@ export async function POST(req) {
       return new Response(JSON.stringify({ success: false, message: "Barcode token hilang." }), { status: 400 });
     }
 
-    // Tarik data reservasi secara rinci untuk kalkulasi waktu lokal
     const { data: reservation, error: resErr } = await supabase
       .from("reservations")
       .select("id, status, booking_date, start_time, field_id, user_id, fields(venue_id)")
@@ -30,38 +31,22 @@ export async function POST(req) {
       .single();
 
     if (resErr || !reservation) {
-      return new Response(JSON.stringify({ success: false, message: "Tiket tidak ditemukan atau barcode tidak valid." }), { status: 404 });
+      return new Response(JSON.stringify({ success: false, message: "Tiket tidak ditemukan, kedaluwarsa, atau Anda tidak memiliki hak otorisasi data." }), { status: 404 });
     }
 
-    // Validasi Kepemilikan Venue Mutlak
-    const venueId = reservation.fields?.venue_id;
-    const { data: venueOwnership } = await supabase
-      .from("venues")
-      .select("id")
-      .eq("id", venueId)
-      .eq("owner_id", user.id)
-      .single();
-
-    if (!venueOwnership) {
-      return new Response(JSON.stringify({ success: false, message: "Akses ditolak. Tiket ini bukan untuk Venue Anda." }), { status: 403 });
-    }
-
-    // FAIL-SAFE GUARD: Penegakan Disiplin Waktu (Strict Forfeit Policy 15 Menit)
-    // Jika tiket masih CONFIRMED, pastikan admin tidak men-scan tiket yang sudah telat lewat 15 menit
     if (reservation.status === 'CONFIRMED') {
-      const reservationDateTimeWITA = new Date(`${reservation.booking_date}T${reservation.start_time}+08:00`); // WITA = UTC+8
+      const reservationDateTimeWITA = new Date(`${reservation.booking_date}T${reservation.start_time}+08:00`); 
       const currentDateTimeWITA = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Makassar"}));
       
       const diffInMinutes = (currentDateTimeWITA - reservationDateTimeWITA) / 60000;
 
       if (diffInMinutes > 15) {
-        // Cronjob gagal/terlambat
         await supabase.from("reservations").update({ status: "FORFEITED" }).eq("id", reservation.id);
-        await supabase.from("slots").update({ status: "AVAILABLE" }).eq("id", reservation.field_id);
+        await supabase.from("slots").update({ status: "AVAILABLE", reservation_id: null, locked_until: null }).eq("reservation_id", reservation.id);
         
         return new Response(JSON.stringify({ 
           success: false, 
-          message: "Akses Ditolak. Keterlambatan melebihi 15 menit. Dana disita 100% dan tiket dihanguskan oleh sistem." 
+          message: "Akses Ditolak. Keterlambatan melebihi 15 menit. Dana disita dan tiket hangus." 
         }), { status: 403 });
       }
     } else {
@@ -71,7 +56,6 @@ export async function POST(req) {
       }), { status: 400 });
     }
 
-    // Eksekusi Check-In & Penutupan Transaksi (Sesuai Flowchart Bab 2.5)
     const { error: updateErr } = await supabase
       .from("reservations")
       .update({ status: "COMPLETED", verified_by: user.id })
