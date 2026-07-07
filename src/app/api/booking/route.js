@@ -1,146 +1,72 @@
 import { NextResponse } from "next/server";
-import { getSupabaseUser } from "../../../lib/supabase";
+import { z } from "zod";
+import { withAuthAndCatch } from "../../../lib/api-wrapper";
+import { SLOT_STATUS } from "../../../lib/constants";
 
-export async function POST(request) {
-  try {
-    const authHeader = request.headers.get("Authorization");
-    const token = authHeader?.split(" ")[1];
-    if (!token) return NextResponse.json({ message: "Unauthorized. Missing Token." }, { status: 401 });
+// DTO Validation Schema
+const bookingSchema = z.object({
+  slotId: z.string().uuid("ID Slot harus berupa UUID valid"),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal harus YYYY-MM-DD"),
+  time: z.string().regex(/^\d{2}:\d{2}$/, "Format waktu harus HH:MM")
+});
 
-    const supabase = getSupabaseUser(token);
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+async function bookingHandler(request, { supabase, user }) {
+  const body = await request.json();
+  
+  // Validasi ketat akan melempar ZodError jika payload anomali, langsung ditangkap oleh api-wrapper
+  const { slotId, date, time } = bookingSchema.parse(body);
 
-    const { slotId, time, date } = await request.json();
+  // Re-entrant Lock Mechanism dengan Konstanta
+  const { data: slot, error: lockError } = await supabase
+    .from("slots")
+    .update({ status: SLOT_STATUS.LOCKED })
+    .eq("id", slotId)
+    .eq("status", SLOT_STATUS.AVAILABLE) // Hanya kunci jika masih available
+    .select()
+    .single();
 
-    // STEP 1: Ambil status operasional slot terikat beserta relasi kepemilikan user reservasi aktif
-    const { data: currentSlot, error: slotFetchErr } = await supabase
-      .from("slots")
-      .select(`
-        price, field_id, status, reservation_id,
-        reservations ( id, user_id, status )
-      `)
-      .eq("id", slotId)
-      .single();
-
-    if (slotFetchErr || !currentSlot) {
-      return NextResponse.json({ message: "Slot operasional tidak ditemukan." }, { status: 404 });
-    }
-
-    const officialPrice = currentSlot.price;
-    let targetReservationId = currentSlot.reservation_id;
-
-    // STEP 2: FIX CORE LUBANG TOCTOU & DEADLOCK - Terapkan Aturan Re-entrant Lock
-    const isLockedBySameUser = 
-      currentSlot.status === "LOCKED" && 
-      currentSlot.reservations?.user_id === user.id &&
-      currentSlot.reservations?.status === "PENDING";
-
-    if (currentSlot.status !== "AVAILABLE" && !isLockedBySameUser) {
-      return NextResponse.json({ 
-        success: false, 
-        message: "Jadwal sewa ini baru saja dipesan atau dikunci oleh atlet lain." 
-      }, { status: 409 });
-    }
-
-    if (!isLockedBySameUser) {
-      // Skenario A: Slot benar-benar kosong, lakukan penguncian bersyarat eksklusif
-      const { data: lockedSlot, error: lockErr } = await supabase
-        .from("slots")
-        .update({ status: 'LOCKED' })
-        .eq("id", slotId)
-        .eq("status", "AVAILABLE") 
-        .select();
-
-      if (lockErr || !lockedSlot || lockedSlot.length === 0) {
-        return NextResponse.json({ 
-          success: false, 
-          message: "Kondisi Balapan: Jadwal sewa ini telah diambil dalam fraksi milidetik oleh user lain." 
-        }, { status: 409 });
-      }
-
-      // Buat baris manifes transaksi baru
-      const { data: newReservation, error: resError } = await supabase
-        .from("reservations")
-        .insert({
-          user_id: user.id,
-          field_id: currentSlot.field_id,
-          booking_date: date,
-          start_time: time,
-          end_time: time,
-          total_amount: officialPrice,
-          status: "PENDING"
-        })
-        .select()
-        .single();
-
-      if (resError) {
-        await supabase.from("slots").update({ status: 'AVAILABLE', reservation_id: null }).eq("id", slotId);
-        throw resError;
-      }
-
-      targetReservationId = newReservation.id;
-      await supabase.from("slots").update({ reservation_id: targetReservationId }).eq("id", slotId);
-    } else {
-      // Skenario B: Pemilik kunci lama masuk kembali, perbarui waktu pembuatan untuk memperpanjang masa aktif
-      console.log(`[SPORTIX LOCKING]: User ${user.id} memicu re-entrant lock pada slot ${slotId}`);
-      await supabase
-        .from("reservations")
-        .update({ created_at: new Date().toISOString() })
-        .eq("id", targetReservationId);
-    }
-
-    // STEP 3: REST API Integrasi Midtrans Snap Gateway menggunakan ID Reservasi yang Valid
-    const midtransServerKey = process.env.MIDTRANS_SERVER_KEY;
-    if (!midtransServerKey) {
-      return NextResponse.json({ message: "Kesalahan Konfigurasi Gateway Server." }, { status: 500 });
-    }
-
-    // Menggunakan timestamp dinamis pada order_id agar request pembaruan tidak ditolak sebagai duplicate order oleh Midtrans
-    const midtransOrderId = `REV-${targetReservationId}-${Date.now()}`;
-    const midtransPayload = {
-      transaction_details: {
-        order_id: midtransOrderId,
-        gross_amount: Number(officialPrice)
-      },
-      customer_details: {
-        email: user.email,
-        first_name: user.user_metadata?.full_name || "Athlete Customer"
-      },
-      expiry: {
-        start_time: new Date().toISOString().replace("T", " ").substring(0, 19) + " +0800",
-        unit: "minutes",
-        duration: 15
-      }
-    };
-
-    const midtransResponse = await fetch("https://app.sandbox.midtrans.com/snap/v1/transactions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Authorization": `Basic ${Buffer.from(midtransServerKey + ":").toString("base64")}`
-      },
-      body: JSON.stringify(midtransPayload)
-    });
-
-    const midtransData = await midtransResponse.json();
-
-    if (!midtransResponse.ok || !midtransData.token) {
-      if (!isLockedBySameUser) {
-        await supabase.from("slots").update({ status: 'AVAILABLE', reservation_id: null }).eq("id", slotId);
-        await supabase.from("reservations").update({ status: 'FAILED_GATEWAY' }).eq("id", targetReservationId);
-      }
-      return NextResponse.json({ message: "Payment Gateway menolak pembuatan token transaksi." }, { status: 502 });
-    }
-
-    // Catat referensi order_id terbaru ke dalam database transaksi untuk dibaca oleh webhook callback
-    await supabase.from("reservations").update({ payment_gateway_ref: midtransOrderId }).eq("id", targetReservationId);
-
-    return NextResponse.json({ payment_token: midtransData.token });
-
-  } catch (err) {
-    console.error("Booking API Panic Handler:", err);
-    return NextResponse.json({ message: "Kesalahan server internal." }, { status: 500 });
+  if (lockError || !slot) {
+    return NextResponse.json({ success: false, message: "Slot sudah tidak tersedia atau sedang dikunci" }, { status: 409 });
   }
+
+  // Persiapan transaksi Midtrans (Gunakan ENV, dilarang hardcode URL Sandbox)
+  const MIDTRANS_URL = process.env.MIDTRANS_API_URL || "https://app.sandbox.midtrans.com/snap/v1/transactions";
+  const serverKey = Buffer.from(process.env.MIDTRANS_SERVER_KEY + ":").toString("base64");
+
+  const transactionData = {
+    transaction_details: {
+      order_id: `TRX-${slotId}-${Date.now()}`,
+      gross_amount: slot.price
+    },
+    customer_details: {
+      first_name: user.user_metadata?.full_name || "Customer",
+      email: user.email
+    }
+  };
+
+  const midtransResponse = await fetch(MIDTRANS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Basic ${serverKey}`
+    },
+    body: JSON.stringify(transactionData)
+  });
+
+  if (!midtransResponse.ok) {
+    // Release Lock jika gateway gagal
+    await supabase.from("slots").update({ status: SLOT_STATUS.AVAILABLE }).eq("id", slotId);
+    return NextResponse.json({ success: false, message: "Kegagalan Payment Gateway" }, { status: 502 });
+  }
+
+  const midtransResult = await midtransResponse.json();
+
+  return NextResponse.json({ 
+    success: true, 
+    token: midtransResult.token,
+    redirect_url: midtransResult.redirect_url 
+  });
 }
+
+// Bungkus dengan High-Order Function untuk otomatisasi Auth & Error Handling
+export const POST = withAuthAndCatch(bookingHandler);
