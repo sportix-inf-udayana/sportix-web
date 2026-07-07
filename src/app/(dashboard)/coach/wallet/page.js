@@ -1,28 +1,35 @@
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
+import { getSupabaseUser } from "../../../../lib/supabase";
 import WithdrawalClientWrapper from "../../../../components/coach/WithdrawalClientWrapper";
 
 export const dynamic = 'force-dynamic';
 
 export default async function CoachWalletPage() {
   const cookieStore = cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { cookies: { getAll() { return cookieStore.getAll(); } } }
-  );
+  
+  // Ekstraksi token untuk penegakan RLS PostgreSQL
+  const allCookies = cookieStore.getAll();
+  const authCookie = allCookies.find(c => c.name.includes("auth-token"));
+  const token = authCookie ? authCookie.value : "";
+  
+  const supabase = getSupabaseUser(token);
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user || user.user_metadata?.role !== 'COACH') redirect("/login");
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user || user.user_metadata?.role !== 'COACH') redirect("/login");
 
-  const { data: coach } = await supabase.from("coaches").select("status").eq("owner_id", user.id).maybeSingle();
+  // RLS menjamin query ini hanya bisa mengakses row milik user.id
+  const { data: coach } = await supabase
+    .from("coaches")
+    .select("status")
+    .eq("id", user.id) // Konsistensi PK coach
+    .maybeSingle();
 
   if (!coach) redirect("/coach/onboarding");
   if (coach.status === 'PENDING') redirect("/coach/pending");
   if (coach.status === 'REJECTED') redirect("/coach/onboarding");
 
-  // Mengambil data saldo kas pelatih secara aman
+  // Kueri saldo terenkapsulasi RLS
   const { data: balanceData } = await supabase
     .from("balances")
     .select("available_balance, pending_balance")

@@ -1,29 +1,52 @@
-import { getSupabaseAdmin } from "../../../lib/supabase";
 import { NextResponse } from "next/server";
+import { getSupabaseAdmin } from "../../../lib/supabase";
 
-export async function POST(req) {
+export async function GET(request) {
+  // Verifikasi Secret Code dari Vercel Cron
+  const cronSecret = request.headers.get("x-cron-secret");
+  if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+    return NextResponse.json(
+      { success: false, message: "Unauthorized. Invalid Signature." },
+      { status: 401 }
+    );
+  }
+
+  // Gunakan Service Role (Bypass RLS untuk penyapuan global)
+  const supabase = getSupabaseAdmin();
+  
+  // Batas toleransi deadlock: 5 Menit
+  const expirationThreshold = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
   try {
-    // FIX SINKRONISASI: Menyamakan penangkapan header kunci rahasia dengan berkas middleware.js
-    const cronSecret = req.headers.get("x-cron-secret");
-    if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
-      return NextResponse.json({ success: false, message: "Unauthorized. Secret Mismatch." }, { status: 401 });
+    // 1. Ambil ID reservasi PENDING yang sudah kadaluarsa
+    const { data: staleReservations } = await supabase
+      .from("reservations")
+      .select("id")
+      .eq("status", "PENDING")
+      .lt("created_at", expirationThreshold);
+
+    if (staleReservations && staleReservations.length > 0) {
+      const staleIds = staleReservations.map(r => r.id);
+
+      // 2. Bebaskan slot lapangan secara paksa
+      await supabase
+        .from("slots")
+        .update({ status: "AVAILABLE", reservation_id: null })
+        .in("reservation_id", staleIds)
+        .eq("status", "LOCKED");
+
+      // 3. Batalkan status tiket reservasi
+      await supabase
+        .from("reservations")
+        .update({ status: "EXPIRED", notes: "Sistem: Dibatalkan otomatis (Timeout Gateway)" })
+        .in("id", staleIds);
+        
+      console.log(`[CRON] Berhasil membebaskan ${staleIds.length} slot deadlock.`);
     }
 
-    // Menggunakan admin client untuk memastikan fungsi sistem rpc memiliki wewenang penuh mengeksekusi denda
-    const supabase = getSupabaseAdmin();
-
-    const { error } = await supabase.rpc("enforce_strict_forfeits", {
-      current_utc_time: new Date().toISOString(),
-    });
-
-    if (error) {
-      console.error("Cron Execution Failed:", error);
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true, message: "Forfeit policy enforced successfully." });
+    return NextResponse.json({ success: true, message: "Penyapuan slot sukses." });
   } catch (error) {
-    console.error("Cron Critical Failure:", error);
-    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
+    console.error("[CRON ERROR]:", error);
+    return NextResponse.json({ success: false, message: "Kegagalan Database." }, { status: 500 });
   }
 }

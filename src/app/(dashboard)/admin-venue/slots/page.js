@@ -1,72 +1,50 @@
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
+import { getSupabaseUser } from "../../../../lib/supabase";
 import SlotMatrixClient from "../../../../components/admin-venue/SlotMatrixClient";
 
-// FIX 1: Cegah caching jadwal agar operator tidak salah melihat status ketersediaan arena
 export const dynamic = 'force-dynamic';
 
 export default async function AdminVenueSlotsPage() {
   const cookieStore = cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { cookies: { getAll() { return cookieStore.getAll(); } } }
-  );
+  
+  // Ekstraksi JWT untuk ditanamkan ke dalam header kueri PostgreSQL
+  const allCookies = cookieStore.getAll();
+  const authCookie = allCookies.find(c => c.name.includes("auth-token"));
+  const token = authCookie ? authCookie.value : "";
+  
+  const supabase = getSupabaseUser(token);
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  if (authError || !user || user.user_metadata?.role !== 'ADMIN_VENUE') redirect("/login");
 
-  // FIX 2: Kunci akses halaman di tingkat kontainer server
-  if (!user || user.user_metadata?.role !== 'ADMIN_VENUE') {
-    redirect("/login");
-  }
-
-  // Dapatkan profil arena yang dikelola oleh user terkait
-  const { data: venue, error: venueErr } = await supabase
-    .from("venues")
-    .select("id, name, status")
-    .eq("owner_id", user.id)
-    .single();
-
-  // Redirect ke halaman pending apabila berkas fisik arena belum divalidasi oleh Super Admin
-  if (venueErr || !venue || venue.status !== 'APPROVED') {
-    redirect("/admin-venue/pending");
-  }
-
-  // Dapatkan detail data lapangan internal dari arena
-  const { data: field } = await supabase
+  // RLS menjamin inner join venues hanya mengembalikan lapangan milik auth.uid()
+  // Data kompetitor tidak akan bisa di-bypass meskipun parameter URL dimanipulasi
+  const { data: fields, error: fieldError } = await supabase
     .from("fields")
-    .select("id")
-    .eq("venue_id", venue.id)
-    .maybeSingle();
+    .select(`
+      id, name, type,
+      venues!inner ( id, name )
+    `)
+    .order("name");
 
-  let initialSlots = [];
-  const todayStr = new Date().toISOString().split('T')[0];
-
-  if (field) {
-    // Tarik data slot jadwal hari ini secara dinamis dari database master
-    const { data: slotData } = await supabase
-      .from("slots")
-      .select("id, start_time, end_time, status")
-      .eq("field_id", field.id)
-      .eq("slot_date", todayStr)
-      .order("start_time", { ascending: true });
-      
-    initialSlots = slotData || [];
+  if (fieldError) {
+    return (
+      <div className="bg-red-950/20 border border-red-900 text-red-400 p-4 rounded-lg font-mono text-sm">
+        [DATABASE ERROR]: Kegagalan muat data inventaris multi-tenant. {fieldError.message}
+      </div>
+    );
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col space-y-1">
-        <h1 className="text-xl font-black font-display text-white uppercase tracking-tight">
-          Pusat Operasional Arena
-        </h1>
-        <p className="text-xs text-zinc-500 font-mono uppercase">
-          Fasilitas Aktif: <span className="text-brand-neon">{venue.name}</span>
-        </p>
+    <div className="space-y-6 w-full text-white">
+      <div className="border-b border-zinc-800 pb-4">
+        <h1 className="text-2xl font-black text-white font-display uppercase">Matriks Operasional Slot</h1>
+        <p className="text-zinc-500 text-xs font-mono mt-1">Multi-tenant isolation active. Inventaris kompetitor disembunyikan otomatis.</p>
       </div>
 
-      <SlotMatrixClient initialSlots={initialSlots} venueId={venue.id} />
+      {/* Mendelegasikan interaktivitas state ke Client Component murni */}
+      <SlotMatrixClient initialFields={fields || []} />
     </div>
   );
 }

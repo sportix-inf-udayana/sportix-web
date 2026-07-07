@@ -1,36 +1,64 @@
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
-
-export const dynamic = 'force-dynamic';
+import { getSupabaseUser } from "../../../../lib/supabase";
+import ReportSummaryCards from "../../../../components/admin-venue/ReportSummaryCards";
+import TransactionTable from "../../../../components/admin-venue/TransactionTable";
 
 export default async function AdminVenueReportsPage() {
   const cookieStore = cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { cookies: { getAll() { return cookieStore.getAll(); } } }
-  );
+  
+  const allCookies = cookieStore.getAll();
+  const authCookie = allCookies.find(c => c.name.includes("auth-token"));
+  const token = authCookie ? authCookie.value : "";
+  
+  const supabase = getSupabaseUser(token);
+  
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) redirect("/login");
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user || user.user_metadata?.role !== 'ADMIN_VENUE') redirect("/login");
+  const { data: transactions, error: dataError } = await supabase
+    .from("ledger_transactions")
+    .select(`
+      id,
+      transaction_type,
+      source,
+      amount,
+      created_at,
+      reservations (
+        booking_date,
+        start_time,
+        fields ( name )
+      )
+    `)
+    .order("created_at", { ascending: false });
 
-  // Validasi status kelayakan entitas lapangan di tingkat komponen server
-  const { data: venue } = await supabase.from("venues").select("status").eq("owner_id", user.id).maybeSingle();
+  if (dataError) {
+    return (
+      <div className="bg-red-950/20 border border-red-900 text-red-400 p-4 rounded-lg font-mono text-sm">
+        [DATABASE ERROR]: Gagal memuat audit log finansial: {dataError.message}
+      </div>
+    );
+  }
 
-  if (!venue) redirect("/admin-venue/onboarding");
-  if (venue.status === 'PENDING') redirect("/admin-venue/pending");
-  if (venue.status === 'REJECTED') redirect("/admin-venue/onboarding");
+  const totalRevenue = transactions
+    ?.filter(tx => tx.transaction_type === "CREDIT")
+    ?.reduce((sum, tx) => sum + (tx.amount || 0), 0) || 0;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-4 text-white font-sans">
-      <div className="flex flex-col">
-        <h1 className="text-xl font-black font-display uppercase tracking-tight">Pelaporan Rekonsiliasi Keuangan</h1>
-        <p className="text-xs text-zinc-500 font-mono">Buku Besar Pendapatan Bersih Hasil Reservasi Lapangan</p>
+    <div className="space-y-6 text-white font-mono">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-white">LAPORAN FINANSIAL VENUE</h1>
+        <p className="text-xs text-zinc-500 mt-1">Sistem perlindungan data otomatis berbasis Row Level Security (RLS) aktif.</p>
       </div>
-      <div className="h-64 border border-zinc-800 bg-zinc-900/30 rounded-xl flex items-center justify-center text-xs font-mono text-zinc-500">
-        [ GRAFIK ANALITIK KAS AKTIF ]
-      </div>
+
+      {/* Komponen Kartu Ringkasan */}
+      <ReportSummaryCards 
+        totalRevenue={totalRevenue} 
+        transactionCount={transactions?.length || 0} 
+      />
+
+      {/* Komponen Tabel Utama */}
+      <TransactionTable transactions={transactions} />
     </div>
   );
 }
