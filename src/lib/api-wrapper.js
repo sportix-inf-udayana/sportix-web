@@ -5,9 +5,8 @@ import { z } from "zod";
 export function withAuthAndCatch(handler) {
   return async (request, context) => {
     try {
-      // Ekstraksi token otomatis dari Header
-      const authHeader = request.headers.get('Authorization');
-      const token = authHeader ? authHeader.replace('Bearer ', '') : null;
+      const authHeader = request.headers.get("Authorization");
+      const token = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
       
       const supabase = getSupabaseUser(token);
       const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -16,7 +15,6 @@ export function withAuthAndCatch(handler) {
         return NextResponse.json({ success: false, message: "Unauthorized Request" }, { status: 401 });
       }
 
-      // Eksekusi handler utama dengan menginjeksi supabase client dan user
       return await handler(request, { ...context, supabase, user });
       
     } catch (error) {

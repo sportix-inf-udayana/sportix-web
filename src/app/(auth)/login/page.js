@@ -7,6 +7,13 @@ import LoginBanner from "../../../components/auth/LoginBanner";
 
 export const dynamic = 'force-dynamic';
 
+const ROLE_REDIRECTS = {
+  SUPER_ADMIN: "/super-admin/verifications",
+  ADMIN_VENUE: "/admin-venue/slots",
+  COACH: "/coach/schedule",
+  UMKM_SELLER: "/seller-umkm/products",
+};
+
 export default async function LoginPage({ searchParams }) {
   const cookieStore = cookies();
   const supabase = createServerClient(
@@ -16,14 +23,10 @@ export default async function LoginPage({ searchParams }) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
+  
   if (user) {
-    const role = user.user_metadata?.role || 'CUSTOMER';
-    
-    if (role === 'SUPER_ADMIN') redirect('/super-admin/verifications');
-    if (role === 'ADMIN_VENUE') redirect('/admin-venue/slots');
-    if (role === 'UMKM_SELLER') redirect('/seller-umkm/products');
-    if (role === 'COACH') redirect('/coach/schedule');
-    redirect('/'); 
+    const role = user.user_metadata?.role || "CUSTOMER";
+    redirect(ROLE_REDIRECTS[role] || "/");
   }
 
   const callbackUrl = searchParams?.callback || "/";
