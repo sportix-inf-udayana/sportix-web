@@ -1,60 +1,49 @@
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
+import { getSupabaseUser } from "../../../../lib/supabase";
 import ShipmentDispatcherClient from "../../../../components/umkm/ShipmentDispatcherClient";
 
-// FIX 1: Amankan sirkulasi order baru dengan mematikan cache static HTML
 export const dynamic = 'force-dynamic';
 
-export default async function SellerUmkmOrdersPage() {
+export default async function UmkmOrdersPage() {
   const cookieStore = cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { cookies: { getAll() { return cookieStore.getAll(); } } }
-  );
+  
+  const allCookies = cookieStore.getAll();
+  const authCookie = allCookies.find(c => c.name.includes("auth-token"));
+  const token = authCookie ? authCookie.value : "";
+  
+  const supabase = getSupabaseUser(token);
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  if (authError || !user || user.user_metadata?.role !== 'UMKM_SELLER') redirect("/login");
 
-  // FIX 2: Proteksi SSR RBAC
-  if (!user || user.user_metadata?.role !== 'UMKM_SELLER') {
-    redirect("/login");
-  }
-
-  // Tarik jangkar profil toko jualan merchant
-  const { data: store } = await supabase
-    .from("umkm_stores")
-    .select("id, name, status")
-    .eq("owner_id", user.id)
-    .single();
-
-  if (!store || store.status !== 'APPROVED') {
-    redirect("/seller-umkm/pending");
-  }
-
-  // Ambil manifes pesanan masuk yang sudah lunas terbayar (PREPARING) atau yang sudah dikirim (SHIPPED)
-  const { data: rawOrders } = await supabase
+  // Kueri terisolasi: PostgreSQL RLS menolak akses jika store_id tidak berelasi dengan auth.uid()
+  const { data: orders, error: orderError } = await supabase
     .from("umkm_orders")
     .select(`
-      id, status, quantity, delivery_address, created_at,
-      umkm_products ( name, price )
+      id, status, total_price, created_at, quantity,
+      umkm_products ( name, image_url ),
+      users ( raw_user_meta_data )
     `)
-    .eq("store_id", store.id)
-    .in("status", ["PREPARING", "SHIPPED"])
     .order("created_at", { ascending: false });
 
-  return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col space-y-1">
-        <h1 className="text-xl font-black font-display text-white uppercase tracking-tight">
-          Mitra Lokapasar UMKM
-        </h1>
-        <p className="text-xs text-zinc-500 font-mono uppercase">
-          Pengelola Toko: <span className="text-purple-400">{store.name}</span>
-        </p>
+  if (orderError) {
+    return (
+      <div className="bg-red-950/20 border border-red-900 text-red-400 p-4 rounded-lg font-mono text-sm">
+        [DATABASE ERROR]: Spionase industri digagalkan atau koneksi terputus. {orderError.message}
       </div>
+    );
+  }
 
-      <ShipmentDispatcherClient initialOrders={rawOrders || []} />
+  return (
+    <div className="space-y-6 w-full text-white">
+      <div className="border-b border-zinc-800 pb-4">
+        <h1 className="text-2xl font-black text-white font-display uppercase">Manajemen Pesanan Logistik</h1>
+        <p className="text-zinc-500 text-xs font-mono mt-1">Pusat komando logistik UMKM (Encrypted Bearer Token).</p>
+      </div>
+      
+      {/* Container interaktif untuk mutasi status resi pengiriman */}
+      <ShipmentDispatcherClient initialOrders={orders || []} />
     </div>
   );
 }
