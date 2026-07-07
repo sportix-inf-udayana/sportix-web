@@ -5,6 +5,20 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { Mail, Lock, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 
+// Inisialisasi di luar komponen agar tidak dibuat ulang setiap re-render
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
+const ROLE_REDIRECTS = {
+  SUPER_ADMIN: "/super-admin/verifications",
+  ADMIN_VENUE: "/admin-venue/slots",
+  COACH: "/coach/schedule",
+  UMKM_SELLER: "/seller-umkm/products",
+  CUSTOMER: "/",
+};
+
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -12,11 +26,6 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -26,39 +35,21 @@ export default function LoginForm() {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
-        password: password,
+        password,
       });
 
       if (error) throw error;
 
       if (data?.user) {
         const role = data.user.user_metadata?.role || "CUSTOMER";
-        
         const callbackUrl = searchParams.get("callback");
-        if (callbackUrl) {
-          router.refresh();
-          router.push(decodeURIComponent(callbackUrl));
-          return;
-        }
+        
+        const destination = callbackUrl 
+          ? decodeURIComponent(callbackUrl) 
+          : (ROLE_REDIRECTS[role] || "/");
 
-        switch (role) {
-          case "SUPER_ADMIN":
-            router.push("/super-admin/verifications");
-            break;
-          case "ADMIN_VENUE":
-            router.push("/admin-venue/slots");
-            break;
-          case "COACH":
-            router.push("/coach/schedule");
-            break;
-          case "UMKM_SELLER":
-            router.push("/seller-umkm/products");
-            break;
-          default:
-            router.push("/");
-            break;
-        }
         router.refresh();
+        router.push(destination);
       }
     } catch (err) {
       console.error("Authentication Failure:", err);
