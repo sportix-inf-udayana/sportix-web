@@ -1,82 +1,53 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { withAuthAndCatch } from "../../../lib/api-wrapper";
 import { getSupabaseAdmin } from "../../../lib/supabase";
+import { ROLE } from "../../../lib/constants";
 
-export async function POST(req) {
-  const startTime = Date.now();
-  try {
-    const supabase = getSupabaseAdmin();
-    if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
+const verificationSchema = z.object({
+  entityId: z.string().uuid("ID Entitas tidak valid"),
+  entityType: z.enum(['VENUE', 'COACH', 'UMKM_STORE']),
+  action: z.enum(['APPROVE', 'REJECT'])
+});
 
-    const authHeader = req.headers.get('Authorization');
-    const token = authHeader ? authHeader.replace('Bearer ', '') : null;
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) return new NextResponse("Unauthorized", { status: 401 });
+async function verificationHandler(req, { user }) {
+  // 1. Validasi Otoritas Mutlak
+  if (user.user_metadata?.role !== ROLE.SUPER_ADMIN) {
+    return NextResponse.json({ success: false, message: "Forbidden. Membutuhkan akses Super Admin." }, { status: 403 });
+  }
 
-    const { data: adminUser } = await supabase.from("users").select("role").eq("id", user.id).single();
-    if (!adminUser || adminUser.role !== 'SUPER_ADMIN') {
-      return NextResponse.json({ success: false, message: "Forbidden. Membutuhkan akses Super Admin." }, { status: 403 });
-    }
+  // 2. Validasi Payload
+  const body = await req.json();
+  const { entityId, entityType, action } = verificationSchema.parse(body);
 
-    const body = await req.json();
-    const { entityId, entityType, action } = body; 
+  // 3. Gunakan Admin Client HANYA untuk Super Admin (Bypass RLS untuk modifikasi tenant lain)
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return new NextResponse("Service Unavailable", { status: 503 });
 
-    if (!entityId || !entityType || !action) {
-      return NextResponse.json({ success: false, message: "Parameter validasi tidak lengkap." }, { status: 400 });
-    }
+  const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+  const targetTable = entityType === 'VENUE' ? 'venues' : entityType === 'COACH' ? 'coaches' : 'umkm_stores';
 
-    const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-    let targetTable = '';
+  const { data: targetEntity, error: updateErr } = await supabase
+    .from(targetTable)
+    .update({ status: newStatus })
+    .eq("id", entityId)
+    .select()
+    .single();
 
-    switch (entityType) {
-      case 'VENUE': targetTable = 'venues'; break;
-      case 'COACH': targetTable = 'coaches'; break;
-      case 'UMKM_STORE': targetTable = 'umkm_stores'; break;
-      default: return NextResponse.json({ success: false, message: "Tipe entitas tidak valid." }, { status: 400 });
-    }
+  if (updateErr || !targetEntity) throw updateErr;
 
-    const { data: targetEntity, error: updateErr } = await supabase
-      .from(targetTable)
-      .update({ status: newStatus })
-      .eq("id", entityId)
-      .select()
-      .single();
-
-    if (updateErr || !targetEntity) {
-      console.error("Verification Update Error:", updateErr);
-      return NextResponse.json({ success: false, message: `Gagal memperbarui status pada tabel ${targetTable}.` }, { status: 500 });
-    }
-
-    // FIX LOGIKA BISNIS: Inisialisasi baris saldo kas awal 0 rupiah agar tidak memicu crash .single() di dashboard mitra
-    if (newStatus === 'APPROVED') {
-      const targetUserId = targetEntity.owner_id || targetEntity.user_id;
-      
-      if (targetUserId) {
-        const { data: existingBalance } = await supabase
-          .from("balances")
-          .select("id")
-          .eq("user_id", targetUserId)
-          .maybeSingle();
-
-        if (!existingBalance) {
-          await supabase.from("balances").insert({
-            user_id: targetUserId,
-            available_balance: 0,
-            pending_balance: 0
-          });
-          console.log(`[SPORTIX LEDGER]: Berhasil membuat dompet kas awal untuk user ${targetUserId}`);
-        }
+  // 4. Inisialisasi Dompet Kas
+  if (newStatus === 'APPROVED') {
+    const targetUserId = targetEntity.owner_id || targetEntity.user_id;
+    if (targetUserId) {
+      const { data: existingBalance } = await supabase.from("balances").select("id").eq("user_id", targetUserId).maybeSingle();
+      if (!existingBalance) {
+        await supabase.from("balances").insert({ user_id: targetUserId, available_balance: 0, pending_balance: 0 });
       }
     }
-
-    return NextResponse.json({
-      success: true,
-      message: `${entityType} berhasil di-${newStatus} beserta inisialisasi dompet kas terkait.`,
-      executionMs: Date.now() - startTime
-    });
-
-  } catch (error) {
-    console.error("Verification API Panic:", error);
-    return NextResponse.json({ success: false, error: "Kesalahan internal server." }, { status: 500 });
   }
+
+  return NextResponse.json({ success: true, message: `${entityType} berhasil di-${newStatus}.` });
 }
+
+export const POST = withAuthAndCatch(verificationHandler);
