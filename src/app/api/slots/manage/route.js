@@ -27,15 +27,18 @@ async function patchSlotHandler(req, { supabase }) {
     return NextResponse.json({ success: false, message: `Konflik. Slot diubah agen lain menjadi ${slotInfo.status}.` }, { status: 409 });
   }
 
-  const updatePayload = { status: targetState };
-  if (targetState === SLOT_STATUS.AVAILABLE) {
-    updatePayload.locked_until = null;
-    updatePayload.reservation_id = null;
-  }
+  const isAvailable = targetState === SLOT_STATUS.AVAILABLE;
+  
+  // Object Spread untuk memperingkas pembuatan payload
+  const updatePayload = {
+    status: targetState,
+    ...(isAvailable && { locked_until: null, reservation_id: null })
+  };
 
   await supabase.from("slots").update(updatePayload).eq("id", slotId);
 
-  if (expectedCurrentState === 'BOOKED' && targetState === SLOT_STATUS.AVAILABLE && slotInfo.reservation_id) {
+  // Otomatisasi pembatalan reservasi jika rilis paksa
+  if (expectedCurrentState === 'BOOKED' && isAvailable && slotInfo.reservation_id) {
     await supabase.from("reservations").update({ status: 'CANCELLED_BY_ADMIN' }).eq("id", slotInfo.reservation_id);
   }
 

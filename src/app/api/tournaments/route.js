@@ -3,29 +3,29 @@ import { z } from "zod";
 import { withAuthAndCatch } from "../../../lib/api-wrapper";
 
 const tournamentSchema = z.object({
-  tournamentId: z.string().uuid("ID Turnamen tidak valid"),
-  teamName: z.string().min(3, "Nama tim minimal 3 karakter")
+  tournamentId: z.string().uuid(),
+  teamName: z.string().min(3)
 });
 
 async function tournamentHandler(req, { supabase, user }) {
   const body = await req.json();
   const { tournamentId, teamName } = tournamentSchema.parse(body);
 
-  const { data: registration, error: insertErr } = await supabase
+  const { data: registration, error } = await supabase
     .from("tournament_registrations")
     .insert({
-      user_id: user.id,
       tournament_id: tournamentId,
-      team_name: teamName.trim(),
+      user_id: user.id,
+      team_name: teamName,
       status: "PENDING",
-      payment_status: "PENDING"
+      payment_status: "UNPAID"
     })
     .select()
     .single();
 
-  if (insertErr) throw insertErr;
+  if (error) throw error;
 
-  return NextResponse.json({ success: true, data: registration });
+  return NextResponse.json({ success: true, registrationId: registration.id });
 }
 
 export const POST = withAuthAndCatch(tournamentHandler);

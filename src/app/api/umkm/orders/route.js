@@ -12,7 +12,7 @@ async function getOrdersHandler(req, { supabase, user }) {
   `);
 
   if (role === ROLE.UMKM_SELLER) {
-    const { data: store } = await supabase.from("umkm_stores").select("id").eq("owner_id", user.id).single();
+    const { data: store } = await supabase.from("umkm_stores").select("id").eq("owner_id", user.id).maybeSingle();
     if (!store) return NextResponse.json({ success: true, orders: [] });
     query = query.eq("store_id", store.id);
   } else {
@@ -32,13 +32,10 @@ const patchOrderSchema = z.object({
 });
 
 async function patchOrderHandler(req, { supabase, user }) {
-  const body = await req.json();
-  const { orderId, targetStatus, courierName } = patchOrderSchema.parse(body);
+  const { orderId, targetStatus, courierName } = patchOrderSchema.parse(await req.json());
 
-  const { data: store } = await supabase.from("umkm_stores").select("id").eq("owner_id", user.id).single();
-  if (!store) {
-    return NextResponse.json({ success: false, message: "Profil toko tidak valid." }, { status: 403 });
-  }
+  const { data: store } = await supabase.from("umkm_stores").select("id").eq("owner_id", user.id).maybeSingle();
+  if (!store) return NextResponse.json({ success: false, message: "Profil toko tidak valid." }, { status: 403 });
 
   const { data: updatedOrder, error: updateErr } = await supabase
     .from("umkm_orders")
@@ -47,10 +44,11 @@ async function patchOrderHandler(req, { supabase, user }) {
       courier_name: courierName?.trim() || "Kurir Pengantar Lokal"
     })
     .eq("id", orderId)
-    .eq("store_id", store.id) // Anti-IDOR (Isolasi Tenant)
-    .select();
+    .eq("store_id", store.id) // Anti-IDOR
+    .select()
+    .maybeSingle();
 
-  if (updateErr || !updatedOrder || updatedOrder.length === 0) {
+  if (updateErr || !updatedOrder) {
     return NextResponse.json({ success: false, message: "Gagal memproses perubahan logistik." }, { status: 409 });
   }
 

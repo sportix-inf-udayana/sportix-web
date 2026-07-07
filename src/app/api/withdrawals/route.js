@@ -3,23 +3,17 @@ import { withAuthAndCatch } from "../../../lib/api-wrapper";
 import { ROLE } from "../../../lib/constants";
 
 async function getWithdrawalsHandler(req, { supabase, user }) {
-  const role = user.user_metadata?.role;
-  let query = supabase.from("withdrawal_logs").select("*");
-
-  if (role === ROLE.SUPER_ADMIN) {
-    // Pusat kontrol melihat semua histori
-    query = query.order("created_at", { ascending: false });
-  } else if (role === ROLE.COACH || role === ROLE.ADMIN_VENUE) {
-    // Entitas mitra dibatasi RLS secara otonom, tapi kita pertegas relasinya
-    query = query.eq("user_id", user.id).order("created_at", { ascending: false });
-  } else {
-    return NextResponse.json({ success: false, message: "Forbidden" }, { status: 403 });
+  let query = supabase.from("withdrawals").select("*, users(email)");
+  
+  // Jika bukan admin, hanya ambil milik sendiri
+  if (user.user_metadata?.role !== ROLE.SUPER_ADMIN) {
+    query = query.eq("user_id", user.id);
   }
 
-  const { data: logs, error } = await query;
+  const { data, error } = await query.order("created_at", { ascending: false });
   if (error) throw error;
 
-  return NextResponse.json({ success: true, data: logs || [] });
+  return NextResponse.json({ success: true, data });
 }
 
 export const GET = withAuthAndCatch(getWithdrawalsHandler);
