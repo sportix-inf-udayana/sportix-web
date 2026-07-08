@@ -15,17 +15,9 @@ module.exports = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
-        surface: {
-          DEFAULT: "#131313",
-          hover: "#1c1b1b",
-          elevated: "#0e0e0e",
-          card: "rgba(24, 24, 27, 0.85)",
-        },
         brand: {
-          emerald: "#10b981", // Tersedia sebagai bg-brand-emerald
-          neon: "#4edea3",    // Tersedia sebagai bg-brand-neon
-          amber: "#f59e0b",   // Tersedia sebagai bg-brand-amber
-          slate: "#64748b",   // Standarisasi untuk abu-abu
+          emerald: "#10b981", 
+          amber: "#f59e0b",   
         }
       },
       fontSize: {
