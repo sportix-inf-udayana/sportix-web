@@ -1,7 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 
-// Pindahkan Rules ke Global Scope untuk efisiensi memori (tidak di-recreate tiap request)
 const ACCESS_RULES = [
   { pattern: /^\/(super-admin|api\/verifications|api\/withdrawals(?!Layout|\/request))/, required: "SUPER_ADMIN" },
   { pattern: /^\/(admin-venue|api\/slots\/manage|api\/scan)/, required: "ADMIN_VENUE" },
@@ -39,22 +38,19 @@ export async function middleware(request) {
   const isPublicWebhook = url.pathname.startsWith("/api/payments/webhook");
   const isTransactionalRoute = url.pathname.startsWith("/checkout") || url.pathname.startsWith("/booking");
 
-  // PROTEKSI TERMINAL CRON
   if (isCronRoute) {
     if (request.headers.get("x-cron-secret") !== process.env.CRON_SECRET) {
-      return NextResponse.json({ success: false, message: "Forbidden. Invalid Cron Secret." }, { status: 403 });
+      return NextResponse.json({ success: false, message: "Forbidden. Invalid Signature." }, { status: 403 });
     }
     return supabaseResponse;
   }
 
   let finalResponse = supabaseResponse;
 
-  // HANDLE UNAUTHENTICATED
   if (!user && !isPublicWebhook) {
     if (isApiRoute) {
       return NextResponse.json({ success: false, message: "Unauthorized. JWT Missing." }, { status: 401 });
     }
-    
     if (isTransactionalRoute) {
       url.pathname = "/login";
       url.search = `?callback=${encodeURIComponent(request.nextUrl.pathname + request.nextUrl.search)}`;
@@ -65,21 +61,17 @@ export async function middleware(request) {
     }
   }
 
-  // HANDLE RBAC GRANULAR (AUTHENTICATED)
   if (user) {
     const role = user.user_metadata?.role || "CUSTOMER";
-
     const violation = ACCESS_RULES.find(rule => rule.pattern.test(url.pathname) && role !== rule.required);
+    
     if (violation) {
-      if (isApiRoute) {
-        return NextResponse.json({ success: false, message: "Forbidden. Invalid Role." }, { status: 403 });
-      }
+      if (isApiRoute) return NextResponse.json({ success: false, message: "Forbidden. Role mismatch." }, { status: 403 });
       url.pathname = "/";
       finalResponse = NextResponse.redirect(url);
     }
   }
 
-  // Sinkronisasi cookie jika ada redirect
   if (finalResponse !== supabaseResponse) {
     supabaseResponse.cookies.getAll().forEach((cookie) => {
       finalResponse.cookies.set(cookie.name, cookie.value, cookie.options);
