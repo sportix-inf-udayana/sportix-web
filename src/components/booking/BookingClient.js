@@ -1,32 +1,36 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 import { Loader2, AlertTriangle, ShieldCheck, MapPin } from "lucide-react";
+import { clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
 
 import DateCarousel from "./DateCarousel";
 import SlotGrid from "./SlotGrid";
 import PaymentDrawer from "./PaymentDrawer";
 
+// Utility untuk merapikan class tailwind dinamis
+const cn = (...inputs) => twMerge(clsx(inputs));
+
+// Inisialisasi di Global Scope untuk mencegah re-evaluasi pada setiap re-render
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
 export default function BookingClient({ venue, user }) {
   const router = useRouter();
   
-  // State Manajemen Transaksi
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [slots, setSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState(null);
   
-  // State Eksekusi Kontrol Modal
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [activeToken, setActiveToken] = useState(null);
   const [errorLog, setErrorLog] = useState(null);
-
-  const supabase = useMemo(() => createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ), []);
 
   const fetchSlotsForDate = useCallback(async (dateStr) => {
     setLoadingSlots(true);
@@ -54,26 +58,23 @@ export default function BookingClient({ venue, user }) {
 
       if (slotError) throw slotError;
       
-      const mappedSlots = (slotData || []).map(s => ({
+      setSlots((slotData || []).map(s => ({
         ...s,
         price: fieldData.price_per_hour,
         fieldName: fieldData.name
-      }));
-
-      setSlots(mappedSlots);
+      })));
     } catch (err) {
       console.error("Sinkronisasi Jadwal Gagal:", err);
       setErrorLog(err.message || "Gagal memuat jadwal matriks ketersediaan.");
     } finally {
       setLoadingSlots(false);
     }
-  }, [venue.id, supabase]);
+  }, [venue.id]);
 
   useEffect(() => {
     fetchSlotsForDate(selectedDate);
   }, [selectedDate, fetchSlotsForDate]);
 
-  // FIX LUBANG INTEGRASI: Ekstrak sesi token saat tombol konfirmasi ditekan dan buka PaymentDrawer
   const handleOpenPaymentGate = async () => {
     if (!selectedSlot) return;
     setErrorLog(null);
@@ -85,10 +86,8 @@ export default function BookingClient({ venue, user }) {
         throw new Error("Otorisasi terputus. Sesi Anda tidak valid, harap log in kembali.");
       }
 
-      // Simpan JWT token ke state untuk disalurkan ke dalam PaymentDrawer
       setActiveToken(session.access_token);
       setIsDrawerOpen(true);
-
     } catch (err) {
       setErrorLog(err.message);
       fetchSlotsForDate(selectedDate);
@@ -113,10 +112,7 @@ export default function BookingClient({ venue, user }) {
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-mono font-bold tracking-wider text-zinc-500 uppercase">1. Tentukan Titik Waktu</h3>
         </div>
-        <DateCarousel 
-          selectedDate={selectedDate} 
-          onSelectDate={setSelectedDate} 
-        />
+        <DateCarousel selectedDate={selectedDate} onSelectDate={setSelectedDate} />
       </div>
 
       {errorLog && (
@@ -140,11 +136,7 @@ export default function BookingClient({ venue, user }) {
              <span className="text-xs font-mono text-zinc-500">MENGAMBIL LEDGER JADWAL...</span>
           </div>
         ) : (
-          <SlotGrid 
-            slots={slots} 
-            selectedSlot={selectedSlot} 
-            onSelectSlot={setSelectedSlot} 
-          />
+          <SlotGrid slots={slots} selectedSlot={selectedSlot} onSelectSlot={setSelectedSlot} />
         )}
       </div>
 
@@ -152,18 +144,16 @@ export default function BookingClient({ venue, user }) {
         <button
           onClick={handleOpenPaymentGate}
           disabled={!selectedSlot || loadingSlots}
-          className={`w-full py-4 rounded-xl font-mono text-sm font-bold flex items-center justify-center gap-3 transition-all cursor-pointer
-            ${!selectedSlot 
-              ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' 
-              : 'bg-brand-emerald text-background hover:bg-brand-emerald/90 hover:scale-[1.01] shadow-[0_0_20px_rgba(16,185,129,0.3)]'
-            }`}
+          className={cn(
+            "w-full py-4 rounded-xl font-mono text-sm font-bold flex items-center justify-center gap-3 transition-all cursor-pointer",
+            !selectedSlot 
+              ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
+              : "bg-brand-emerald text-background hover:bg-brand-emerald/90 hover:scale-[1.01] shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+          )}
         >
           <ShieldCheck className="w-5 h-5" />
           <span>
-            {selectedSlot 
-              ? `BUKA KONFIRMASI PEMBAYARAN - RP ${selectedSlot.price.toLocaleString('id-ID')}` 
-              : 'PILIH SLOT TERLEBIH DAHULU'
-            }
+            {selectedSlot ? `BUKA KONFIRMASI PEMBAYARAN - RP ${selectedSlot.price.toLocaleString('id-ID')}` : 'PILIH SLOT TERLEBIH DAHULU'}
           </span>
         </button>
         <p className="text-center text-xs text-zinc-500 mt-3 font-mono">
@@ -171,7 +161,6 @@ export default function BookingClient({ venue, user }) {
         </p>
       </div>
 
-      {/* FIX SINKRONISASI KOMPONEN: Panggil Lapis Konfirmasi dengan menyertakan token otentikasi dinamis */}
       <PaymentDrawer 
         isOpen={isDrawerOpen}
         onClose={() => {
@@ -182,7 +171,6 @@ export default function BookingClient({ venue, user }) {
         venueName={venue.name}
         authToken={activeToken}
       />
-
     </div>
   );
 }
