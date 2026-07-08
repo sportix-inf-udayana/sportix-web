@@ -23,7 +23,7 @@ export default function CustomerFooter() {
           <h4 className="text-white font-bold mb-5 tracking-wide uppercase text-xs font-mono">Eksplorasi</h4>
           <ul className="space-y-3 text-sm text-zinc-400 font-medium">
             <li><Link href="/" className="hover:text-brand-emerald transition-colors">Katalog Arena</Link></li>
-            <li><Link href="/umkm" className="hover:text-brand-emerald transition-colors">Toko Merchandise</Link></li>
+            <li><Link href="/umkm" className="hover:text-brand-emerald transition-colors">Sports Store</Link></li>
             <li><Link href="/tournaments" className="hover:text-brand-emerald transition-colors">Papan Turnamen</Link></li>
           </ul>
         </div>

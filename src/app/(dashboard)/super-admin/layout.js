@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import SuperAdminHeader from "../../../../components/super-admin/SuperAdminHeader";
-import DashboardFooter from "../../../../components/dashboard/DashboardFooter";
+import SuperAdminHeader from "../../../components/super-admin/SuperAdminHeader";
+import DashboardFooter from "../../../components/dashboard/DashboardFooter";
 
 export default async function SuperAdminLayout({ children }) {
   const cookieStore = cookies();

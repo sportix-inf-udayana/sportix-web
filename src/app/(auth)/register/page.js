@@ -28,7 +28,7 @@ export default async function RegisterPage() {
             <Link href="/" className="font-display font-black text-2xl tracking-tight text-white inline-block mb-2">
               SPORTIX<span className="text-brand-emerald">.</span>
             </Link>
-            <h1 className="text-3xl font-bold tracking-tight text-white mt-4 uppercase">Inisiasi Akun</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-white mt-4 uppercase">Daftar Akun</h1>
             <p className="text-zinc-500 text-sm mt-2">
               Bergabunglah dengan ekosistem olahraga otonom dan dapatkan akses ke jaringan arena terverifikasi.
             </p>
@@ -37,9 +37,9 @@ export default async function RegisterPage() {
           <RegisterForm />
 
           <p className="text-center text-sm text-zinc-500">
-            Sudah memiliki otorisasi?{" "}
+            Sudah memiliki Akun?{" "}
             <Link href="/login" className="text-brand-emerald font-bold hover:text-emerald-400 transition-colors">
-              Akses sistem di sini.
+              Masuk di sini.
             </Link>
           </p>
           
