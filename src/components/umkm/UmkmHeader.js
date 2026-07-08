@@ -36,7 +36,7 @@ export default function UmkmHeader({ activeRoute }) {
       <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
         
         <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-start">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-500 shrink-0">
             <Briefcase className="w-5 h-5" />
           </div>
           <div>
@@ -54,7 +54,7 @@ export default function UmkmHeader({ activeRoute }) {
                 activeRoute === 'products' ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
               )}
             >
-              <Layers className={cn("w-4 h-4", activeRoute === 'products' && "text-purple-400")} />
+              <Layers className={cn("w-4 h-4", activeRoute === 'products' && "text-purple-500")} />
               <span>INVENTORY MGR</span>
             </Link>
             <Link 
@@ -64,19 +64,19 @@ export default function UmkmHeader({ activeRoute }) {
                 activeRoute === 'orders' ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
               )}
             >
-              <Truck className={cn("w-4 h-4", activeRoute === 'orders' && "text-purple-400")} />
+              <Truck className={cn("w-4 h-4", activeRoute === 'orders' && "text-purple-500")} />
               <span>SHIPMENT ORDERS</span>
             </Link>
           </div>
 
           <div className="flex items-center gap-3 pl-0 sm:pl-4 border-t sm:border-t-0 sm:border-l border-zinc-800 pt-4 sm:pt-0 w-full sm:w-auto justify-between sm:justify-start">
-            <Link href="/profile" className="flex items-center gap-3 group cursor-pointer">
-              <div className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:border-purple-400 transition-colors">
-                <User className="w-4 h-4 text-zinc-500 group-hover:text-purple-400 transition-colors" />
+            <Link href="/profile" className="flex items-center gap-3 group cursor-pointer px-3 py-2 rounded-lg hover:bg-zinc-900 transition-colors">
+              <div className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center group-hover:border-purple-500 transition-colors">
+                <User className="w-4 h-4 text-zinc-400 group-hover:text-purple-500 transition-colors" />
               </div>
               <div className="text-left">
-                <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-500 block leading-none uppercase mb-1">MERCHANT</span>
-                <span className="text-xs font-bold text-white max-w-[120px] truncate block group-hover:text-purple-400 transition-colors">
+                <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 block leading-none uppercase mb-1">MERCHANT</span>
+                <span className="text-xs font-bold text-white max-w-[110px] truncate block group-hover:text-purple-500 transition-colors">
                   {currentUser?.user_metadata?.full_name || "Memuat..."}
                 </span>
               </div>
@@ -84,7 +84,7 @@ export default function UmkmHeader({ activeRoute }) {
             
             <button 
               onClick={handleLogout}
-              className="bg-zinc-900 hover:bg-red-950/40 border border-zinc-800 hover:border-red-500/30 text-zinc-500 hover:text-red-400 p-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center"
+              className="bg-zinc-900 hover:bg-purple-950/40 border border-zinc-800 hover:border-purple-500/50 text-zinc-400 hover:text-purple-500 p-2.5 rounded-lg transition-all cursor-pointer flex items-center justify-center shadow-sm"
               title="Akhiri Sesi Jualan"
             >
               <LogOut className="w-4 h-4" />
