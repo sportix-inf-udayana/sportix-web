@@ -1,25 +1,25 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { Check, X, Loader2, AlertCircle, ShieldCheck } from "lucide-react";
+
+// Inisiasi Supabase di luar komponen utama
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function VerificationClient({ initialItems }) {
   const [items, setItems] = useState(initialItems || []);
   const [processingId, setProcessingId] = useState(null);
   const [networkError, setNetworkError] = useState(null);
 
-  const supabase = useMemo(() => createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ), []);
-
   const handleAuditAction = async (entityId, entityType, action) => {
     setProcessingId(entityId);
     setNetworkError(null);
 
     try {
-      // FIX: Ambil sesi aktif untuk menyertakan token otentikasi administratif Super Admin
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session) {
         throw new Error("Sesi administratif kedaluwarsa. Silakan masuk kembali.");
@@ -36,13 +36,9 @@ export default function VerificationClient({ initialItems }) {
 
       const result = await response.json();
 
-      if (!response.ok) {
-        throw new Error(result.message || "Gagal memperbarui status verifikasi mitra.");
-      }
+      if (!response.ok) throw new Error(result.message || "Gagal memperbarui status verifikasi mitra.");
 
-      // Hapus item dari antrean lokal setelah berhasil diproses oleh server
       setItems(prev => prev.filter(item => item.id !== entityId));
-
     } catch (err) {
       console.error(err);
       setNetworkError(err.message);
@@ -75,7 +71,7 @@ export default function VerificationClient({ initialItems }) {
             {items.map((entity) => (
               <div key={entity.id} className="py-4 flex flex-col sm:flex-row justify-between items-center gap-4 first:pt-0 last:pb-0">
                 <div className="text-left w-full sm:w-auto">
-                  <span className="text-micro font-mono bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded uppercase block w-max mb-1">
+                  <span className="text-[10px] font-mono bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded uppercase block w-max mb-1">
                     {entity.type || "VENUE"}
                   </span>
                   <h4 className="text-sm font-bold text-white">{entity.name}</h4>

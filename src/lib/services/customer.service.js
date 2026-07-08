@@ -29,19 +29,19 @@ export async function getUmkmCatalog(supabase) {
     if (error) throw error;
 
     return { 
-      data: products?.map(p => ({
+      products: (products || []).map(p => ({
         id: p.id,
         name: p.name,
         price: p.price,
         stock: p.stock,
-        desc: p.description || "Alat olahraga premium.",
-        image: p.image_url || "/image/product-fallback.svg"
-      })) || [], 
+        desc: p.description || "Perlengkapan olahraga lokal.",
+        image: p.image_url || "/image/hero-arena.jpg" // Fallback ke gambar lokal
+      })), 
       error: null 
     };
   } catch (error) {
     console.error("UMKM Catalog Fetch Error:", error);
-    return { data: [], error };
+    return { products: [], error };
   }
 }
 
@@ -51,22 +51,22 @@ export async function getUserTicketHistory(supabase, userId) {
       .from("reservations")
       .select(`
         id, status, barcode_token, booking_date, start_time, total_amount,
-        fields ( name, venues ( name ) )
+        slots ( price, venues ( name ) )
       `)
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
+    const safeTickets = tickets || [];
+    
     return { 
-      data: { 
-        tickets: tickets || [], 
-        activeTickets: tickets?.filter(t => t.status === "CONFIRMED") || [] 
-      }, 
+      tickets: safeTickets,
+      activeTickets: safeTickets.filter(t => t.status === "CONFIRMED"), 
       error: null 
     };
   } catch (error) {
     console.error("Fetch User Tickets Error:", error);
-    return { data: { tickets: [], activeTickets: [] }, error };
+    return { tickets: [], activeTickets: [], error };
   }
 }
