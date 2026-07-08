@@ -1,29 +1,31 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { Loader2, Truck, AlertCircle, CheckCircle } from "lucide-react";
+import { clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+const cn = (...inputs) => twMerge(clsx(inputs));
+
+// Deklarasi diluar scope komponen untuk efisiensi memori
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function ShipmentDispatcherClient({ initialOrders }) {
   const [orders, setOrders] = useState(initialOrders || []);
   const [loadingId, setLoadingId] = useState(null);
   const [errorLog, setErrorLog] = useState(null);
 
-  const supabase = useMemo(() => createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ), []);
-
   const handleDispatchOrder = async (orderId) => {
     setLoadingId(orderId);
     setErrorLog(null);
 
     try {
-      // FIX: Ambil token otentikasi merchant aktif dari browser sebelum menembak rute PATCH
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        throw new Error("Otorisasi terputus. Silakan lakukan penyegaran browser.");
-      }
+      if (sessionError || !session) throw new Error("Otorisasi terputus. Silakan lakukan penyegaran browser.");
 
       const response = await fetch("/api/umkm/orders", {
         method: "PATCH",
@@ -32,21 +34,16 @@ export default function ShipmentDispatcherClient({ initialOrders }) {
           "Authorization": `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
-          orderId: orderId,
+          orderId,
           targetStatus: "SHIPPED",
           courierName: "Sportix Cargo Logistics"
         })
       });
 
       const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Gagal memperbarui manifes ekspedisi jualan.");
 
-      if (!response.ok) {
-        throw new Error(result.message || "Gagal memperbarui manifes ekspedisi jualan.");
-      }
-
-      // Perbarui status pesanan menjadi 'SHIPPED' di state lokal setelah sukses di server
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: "SHIPPED" } : o));
-
     } catch (err) {
       console.error(err);
       setErrorLog(err.message);
@@ -100,13 +97,14 @@ export default function ShipmentDispatcherClient({ initialOrders }) {
                       <button
                         disabled={loadingId === order.id || !isPreparing}
                         onClick={() => handleDispatchOrder(order.id)}
-                        className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 text-white disabled:text-zinc-600 text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
-                      >
-                        {loadingId === order.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Truck className="w-3.5 h-3.5" />
+                        className={cn(
+                          "px-4 py-2 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all shadow-md",
+                          (loadingId === order.id || !isPreparing) 
+                            ? "bg-zinc-800 text-zinc-600 cursor-not-allowed" 
+                            : "bg-purple-600 hover:bg-purple-500 text-white cursor-pointer"
                         )}
+                      >
+                        {loadingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
                         <span>SERAHKAN KE KURIR</span>
                       </button>
                     )}

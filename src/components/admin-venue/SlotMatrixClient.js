@@ -1,28 +1,31 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { Loader2, AlertCircle, Grid, ShieldAlert, Check } from "lucide-react";
+import { Loader2, AlertCircle, Grid, ShieldAlert } from "lucide-react";
+import { clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+const cn = (...inputs) => twMerge(clsx(inputs));
+
+// Inisiasi Supabase di luar komponen
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function SlotMatrixClient({ initialSlots, venueId }) {
   const [slots, setSlots] = useState(initialSlots || []);
   const [updatingId, setUpdatingId] = useState(null);
   const [globalError, setGlobalError] = useState(null);
 
-  const supabase = useMemo(() => createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ), []);
-
   const handleToggleSlotStatus = async (slotId, currentStatus) => {
     setUpdatingId(slotId);
     setGlobalError(null);
 
-    // Tentukan target perubahan status matriks operasional
     const targetState = currentStatus === "AVAILABLE" ? "UNAVAILABLE" : "AVAILABLE";
 
     try {
-      // FIX CORE LUBANG JARINGAN: Tarik token akses aktif dari session storage browser secara aman
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError || !session) {
@@ -35,22 +38,14 @@ export default function SlotMatrixClient({ initialSlots, venueId }) {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({
-          slotId: slotId,
-          targetState: targetState,
-          expectedCurrentState: currentStatus
-        })
+        body: JSON.stringify({ slotId, targetState, expectedCurrentState: currentStatus })
       });
 
       const result = await response.json();
 
-      if (!response.ok) {
-        throw new Error(result.message || "Gagal memperbarui status matriks slot sewa.");
-      }
+      if (!response.ok) throw new Error(result.message || "Gagal memperbarui status matriks.");
 
-      // Perbarui kondisi state lokal secara optimistik setelah disetujui server
       setSlots(prev => prev.map(s => s.id === slotId ? { ...s, status: targetState } : s));
-
     } catch (err) {
       console.error(err);
       setGlobalError(err.message);
@@ -86,22 +81,18 @@ export default function SlotMatrixClient({ initialSlots, venueId }) {
                 key={slot.id}
                 disabled={isBooked || isLocked || isLoading}
                 onClick={() => handleToggleSlotStatus(slot.id, slot.status)}
-                className={`p-4 rounded-xl border flex flex-col justify-between h-24 text-left font-mono transition-all duration-200 relative group
-                  ${isAvailable 
-                    ? 'bg-zinc-950 border-zinc-800 hover:border-brand-neon cursor-pointer' 
-                    : isBooked 
-                    ? 'bg-zinc-900/40 border-red-500/20 text-red-400/60 cursor-not-allowed'
-                    : isLocked
-                    ? 'bg-zinc-900/40 border-amber-500/20 text-amber-400/60 cursor-not-allowed'
-                    : 'bg-zinc-900 border-zinc-800/50 text-zinc-600 hover:border-zinc-700 cursor-pointer'
-                  }`}
+                className={cn(
+                  "p-4 rounded-xl border flex flex-col justify-between h-24 text-left font-mono transition-all duration-200 relative group",
+                  isAvailable && "bg-zinc-950 border-zinc-800 hover:border-brand-neon cursor-pointer",
+                  isBooked && "bg-zinc-900/40 border-red-500/20 text-red-400/60 cursor-not-allowed",
+                  isLocked && "bg-zinc-900/40 border-amber-500/20 text-amber-400/60 cursor-not-allowed",
+                  (!isAvailable && !isBooked && !isLocked) && "bg-zinc-900 border-zinc-800/50 text-zinc-600 hover:border-zinc-700 cursor-pointer"
+                )}
               >
                 <span className="text-xs font-bold text-white block">{slot.start_time}</span>
                 
                 <div className="flex items-center justify-between w-full mt-2">
-                  <span className="text-micro block tracking-tighter uppercase">
-                    {slot.status}
-                  </span>
+                  <span className="text-[10px] block tracking-tighter uppercase">{slot.status}</span>
                   {isLoading && <Loader2 className="w-3 h-3 animate-spin text-brand-neon" />}
                   {isBooked && <ShieldAlert className="w-3.5 h-3.5 text-red-400" />}
                 </div>

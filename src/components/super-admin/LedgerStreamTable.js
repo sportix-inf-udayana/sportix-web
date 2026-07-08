@@ -1,11 +1,15 @@
 import React from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+const cn = (...inputs) => twMerge(clsx(inputs));
 
 export default function LedgerStreamTable({ streamData }) {
   return (
-    <div className="bg-surface border border-zinc-800 rounded-xl p-6">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
       <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-6 flex items-center gap-1.5">
-        <RefreshCw className="w-4 h-4 text-red-400" /> IMMUTABLE LEDGER STREAM
+        <RefreshCw className="w-4 h-4 text-brand-emerald" /> IMMUTABLE LEDGER STREAM
       </h3>
 
       {streamData && streamData.length > 0 ? (
@@ -22,23 +26,28 @@ export default function LedgerStreamTable({ streamData }) {
             </thead>
             <tbody className="divide-y divide-zinc-800/60">
               {streamData.map((tx) => (
-                <tr key={tx.id} className="hover:bg-surface-hover/40">
+                <tr key={tx.id} className="hover:bg-zinc-800/40 transition-colors">
                   <td className="py-4 font-bold text-zinc-300">
                     {tx.id.substring(0, 8)}...
                   </td>
-                  <td className="py-4 text-zinc-400">{new Date(tx.created_at).toLocaleString('id-ID')}</td>
+                  <td className="py-4 text-zinc-400">
+                    {new Date(tx.created_at).toLocaleString('id-ID')}
+                  </td>
                   <td className="py-4">
-                    <span className="bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded text-zinc-300">
+                    <span className="bg-zinc-950 border border-zinc-800 px-2 py-0.5 rounded text-zinc-300">
                       {tx.source}
                     </span>
                   </td>
                   <td className="py-4 text-right font-bold text-white">
                     Rp {Number(tx.amount || 0).toLocaleString("id-ID")}
                   </td>
-                  <td className="py-4 text-right">
-                    <span className={`text-micro font-bold px-2 py-0.5 rounded uppercase ${
-                      tx.transaction_type === "DEBIT" ? "bg-red-500/15 text-red-400 border border-red-500/20" : "bg-brand-emerald/15 text-brand-neon border border-brand-emerald/20"
-                    }`}>
+                  <td className="py-4 text-right flex justify-end">
+                    <span className={cn(
+                      "text-[10px] font-bold px-2 py-0.5 rounded uppercase border w-max",
+                      tx.transaction_type === "DEBIT" 
+                        ? "bg-red-500/10 text-red-400 border-red-500/20" 
+                        : "bg-brand-emerald/10 text-brand-emerald border-brand-emerald/20"
+                    )}>
                       {tx.transaction_type}
                     </span>
                   </td>

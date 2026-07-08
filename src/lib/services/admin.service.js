@@ -1,115 +1,39 @@
-export async function getPendingVenues(supabase) {
-  try {
-    const { data, error } = await supabase
-      .from("venues")
-      .select("id, name, address, status, owner_id")
-      .eq("status", "PENDING")
-      .order("created_at", { ascending: true });
-
-    if (error) throw error;
-    return { data, error: null };
-  } catch (error) {
-    console.error("Fetch Pending Venues Error:", error);
-    return { data: null, error };
-  }
-}
-
-export async function getOwnerVenue(supabase, userId) {
-  try {
-    const { data, error } = await supabase
-      .from("venues")
-      .select("id, name")
-      .eq("owner_id", userId)
-      .single();
-
-    if (error) throw error;
-    return { data, error: null };
-  } catch (error) {
-    console.error("Fetch Owner Venue Error:", error);
-    return { data: null, error };
-  }
-}
-
-export async function getVenueSlots(supabase, venueId, targetDate) {
-  try {
-    const { data, error } = await supabase
-      .from("slots")
-      .select(`
-        id, time, status, price, locked_until,
-        reservations ( id, status, payment_gateway_ref, users(full_name, phone) )
-      `)
-      .eq("venue_id", venueId)
-      .eq("date", targetDate)
-      .order("time", { ascending: true });
-
-    if (error) throw error;
-    return { data, error: null };
-  } catch (error) {
-    console.error("Fetch Venue Slots Error:", error);
-    return { data: [], error };
-  }
-}
-
 export async function getGlobalFinancialMetrics(supabase) {
   try {
-    const [volumeRes, forfeitedRes, refundRes, ledgerRes] = await Promise.all([
-      supabase.from("ledger_transactions").select("amount").eq("transaction_type", "CREDIT"),
-      supabase.from("reservations").select("*", { count: 'exact', head: true }).in("status", ["EXPIRED_PAID", "FORFEITED"]),
-      supabase.from("refund_logs").select("*", { count: 'exact', head: true }).eq("status", "PENDING_ACTION"),
-      supabase.from("ledger_transactions").select("id, transaction_type, source, amount, created_at, user_id").order("created_at", { ascending: false }).limit(50)
-    ]);
+    const { data: ledger, error: ledgerError } = await supabase
+      .from("ledger_transactions")
+      .select("id, transaction_type, source, amount, created_at")
+      .order("created_at", { ascending: false })
+      .limit(100);
 
-    if (volumeRes.error) throw volumeRes.error;
-    if (ledgerRes.error) throw ledgerRes.error;
+    if (ledgerError) throw ledgerError;
 
-    // Defensively enforce safe integer parsing for financial calculation to avoid floating-point drift
-    const totalVolume = volumeRes.data?.reduce((sum, tx) => {
-      const parsedAmount = Math.floor(Number(tx.amount || 0));
-      return sum + (isNaN(parsedAmount) ? 0 : parsedAmount);
-    }, 0) || 0;
-    
+    // Hitung total forfeit
+    const { count: forfeitedCount } = await supabase
+      .from("reservations")
+      .select("id", { count: 'exact', head: true })
+      .eq("status", "FORFEITED");
+
+    // Hitung total refund gantung
+    const { count: refundCount } = await supabase
+      .from("refund_logs")
+      .select("id", { count: 'exact', head: true })
+      .eq("status", "PENDING_ACTION");
+
+    // Akumulasi volume kredit
+    const totalVolume = ledger
+      ?.filter(tx => tx.transaction_type === "CREDIT")
+      ?.reduce((acc, curr) => acc + Number(curr.amount || 0), 0) || 0;
+
     return {
+      integrityMismatch: 0, 
+      forfeitedCount: forfeitedCount || 0,
+      unprocessedRefundsCount: refundCount || 0,
       totalVolume,
-      forfeitedCount: forfeitedRes.count || 0,
-      unprocessedRefundsCount: refundRes.count || 0,
-      ledgerStream: ledgerRes.data || [],
-      integrityMismatch: (refundRes.count || 0) > 0 ? (refundRes.count || 0) : 0,
-      error: null
+      ledgerStream: ledger || []
     };
   } catch (error) {
-    console.error("Global Financial Metrics Error:", error);
-    return { error: error.message };
-  }
-}
-
-export async function getVenueReports(supabase, userId) {
-  try {
-    const { data: venue, error: venueError } = await supabase
-      .from("venues")
-      .select("id, name")
-      .eq("owner_id", userId)
-      .single();
-
-    if (venueError) throw venueError;
-
-    const { data: reports, error: reportError } = await supabase
-      .from("revenue_reports")
-      .select("*")
-      .eq("venue_id", venue.id)
-      .order("report_date", { ascending: false })
-      .limit(30);
-
-    if (reportError) throw reportError;
-
-    const totals = {
-      revenue: reports?.reduce((acc, curr) => acc + Math.floor(Number(curr.operational_revenue || 0)), 0) || 0,
-      forfeit: reports?.reduce((acc, curr) => acc + Math.floor(Number(curr.forfeited_revenue || 0)), 0) || 0,
-      noShows: reports?.reduce((acc, curr) => acc + Number(curr.total_no_shows || 0), 0) || 0,
-    };
-
-    return { venue, reports: reports || [], totals, error: null };
-  } catch (error) {
-    console.error("Fetch Venue Reports Error:", error);
-    return { venue: null, reports: [], totals: null, error };
+    console.error("Global Financial Metrics Fetch Error:", error);
+    return null;
   }
 }

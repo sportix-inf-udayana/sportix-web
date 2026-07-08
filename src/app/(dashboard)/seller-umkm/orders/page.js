@@ -1,30 +1,24 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getSupabaseUser } from "../../../../lib/supabase";
+import { createServerClient } from "@supabase/ssr";
 import ShipmentDispatcherClient from "../../../../components/umkm/ShipmentDispatcherClient";
 
 export const dynamic = 'force-dynamic';
 
 export default async function UmkmOrdersPage() {
   const cookieStore = cookies();
-  
-  const allCookies = cookieStore.getAll();
-  const authCookie = allCookies.find(c => c.name.includes("auth-token"));
-  const token = authCookie ? authCookie.value : "";
-  
-  const supabase = getSupabaseUser(token);
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    { cookies: { getAll: () => cookieStore.getAll() } }
+  );
 
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user || user.user_metadata?.role !== 'UMKM_SELLER') redirect("/login");
 
-  // Kueri terisolasi: PostgreSQL RLS menolak akses jika store_id tidak berelasi dengan auth.uid()
   const { data: orders, error: orderError } = await supabase
     .from("umkm_orders")
-    .select(`
-      id, status, total_price, created_at, quantity,
-      umkm_products ( name, image_url ),
-      users ( raw_user_meta_data )
-    `)
+    .select("id, status, total_price, created_at, quantity, umkm_products(name, image_url), users(raw_user_meta_data)")
     .order("created_at", { ascending: false });
 
   if (orderError) {
@@ -42,7 +36,6 @@ export default async function UmkmOrdersPage() {
         <p className="text-zinc-500 text-xs font-mono mt-1">Pusat komando logistik UMKM (Encrypted Bearer Token).</p>
       </div>
       
-      {/* Container interaktif untuk mutasi status resi pengiriman */}
       <ShipmentDispatcherClient initialOrders={orders || []} />
     </div>
   );

@@ -3,7 +3,6 @@ import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
 import VerificationClient from "../../../../components/super-admin/VerificationClient";
 
-// FIX 1: Matikan optimasi statis agar antrean verifikasi selalu menyajikan data riil ter-update
 export const dynamic = 'force-dynamic';
 
 export default async function SuperAdminVerificationsPage() {
@@ -11,24 +10,22 @@ export default async function SuperAdminVerificationsPage() {
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { cookies: { getAll() { return cookieStore.getAll(); } } }
+    { cookies: { getAll: () => cookieStore.getAll() } }
   );
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // FIX 2: Penegakan Defense-in-Depth untuk mencegah akses ilegal sisi server
   if (!user || user.user_metadata?.role !== 'SUPER_ADMIN') {
     redirect("/login");
   }
 
-  // Tarik data pendaftaran pending dari seluruh klaster kemitraan secara serentak (Parallel Fetching)
+  // Tarik data pendaftaran pending dari seluruh klaster kemitraan secara serentak
   const [venuesRes, coachesRes, storesRes] = await Promise.all([
     supabase.from("venues").select("id, name, address").eq("status", "PENDING"),
     supabase.from("coaches").select("id, full_name, specialization").eq("status", "PENDING"),
     supabase.from("umkm_stores").select("id, name, address").eq("status", "PENDING")
   ]);
 
-  // Konsolidasikan seluruh data mentah menjadi satu array terpadu untuk dikirim ke client component
   const unifiedPendingQueue = [
     ...(venuesRes.data || []).map(v => ({ ...v, type: "VENUE" })),
     ...(coachesRes.data || []).map(c => ({ id: c.id, name: c.full_name, address: c.specialization, type: "COACH" })),
@@ -46,7 +43,6 @@ export default async function SuperAdminVerificationsPage() {
         </p>
       </div>
 
-      {/* Alirkan antrean dinamis ke komponen interaktif klien yang telah dipasang token-bound headers */}
       <VerificationClient initialItems={unifiedPendingQueue} />
     </div>
   );
