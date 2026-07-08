@@ -26,6 +26,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "autoprefixer": "^10.5.2",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
     "postcss": "^8",
