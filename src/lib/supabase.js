@@ -4,33 +4,22 @@ const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-let supabaseAnonInstance = null;
-let supabaseServiceInstance = null;
-
 const checkEnv = (url, key, type) => {
   if (!url || !key) throw new Error(`CRITICAL: Konfigurasi Supabase ${type} tidak ditemukan.`);
 };
 
 export function getSupabase() {
-  if (supabaseAnonInstance) return supabaseAnonInstance;
   checkEnv(URL, ANON_KEY, "URL/ANON_KEY");
-
-  supabaseAnonInstance = createClient(URL, ANON_KEY, {
+  return createClient(URL, ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-
-  return supabaseAnonInstance;
 }
 
 export function getSupabaseAdmin() {
-  if (supabaseServiceInstance) return supabaseServiceInstance;
   checkEnv(URL, SERVICE_KEY, "Service Role Key");
-
-  supabaseServiceInstance = createClient(URL, SERVICE_KEY, {
+  return createClient(URL, SERVICE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-
-  return supabaseServiceInstance;
 }
 
 export function getSupabaseUser(token) {

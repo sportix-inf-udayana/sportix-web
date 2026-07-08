@@ -54,7 +54,7 @@ export default function CustomerHeader() {
 
         <nav className="hidden md:flex items-center gap-8 text-sm font-mono font-bold text-zinc-400">
           <Link href="/" className="hover:text-white transition-colors">CARI LAPANGAN</Link>
-          <Link href="/umkm" className="hover:text-white transition-colors">LOKAPASAR UMKM</Link>
+          <Link href="/umkm" className="hover:text-white transition-colors">Tiket & Shop</Link>
           <Link href="/tournaments" className="hover:text-white transition-colors">TURNAMEN</Link>
         </nav>
 
