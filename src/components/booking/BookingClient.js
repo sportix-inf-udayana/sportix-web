@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { useRouter } from "next/navigation";
 import { Loader2, AlertTriangle, ShieldCheck, MapPin } from "lucide-react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -10,19 +9,16 @@ import { twMerge } from "tailwind-merge";
 import DateCarousel from "./DateCarousel";
 import SlotGrid from "./SlotGrid";
 import PaymentDrawer from "./PaymentDrawer";
+import { getAvailableSlots } from "../../../lib/services/venue.service";
 
-// Utility untuk merapikan class tailwind dinamis
 const cn = (...inputs) => twMerge(clsx(inputs));
 
-// Inisialisasi di Global Scope untuk mencegah re-evaluasi pada setiap re-render
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-export default function BookingClient({ venue, user }) {
-  const router = useRouter();
-  
+export default function BookingClient({ venue }) {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [slots, setSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(true);
@@ -37,38 +33,15 @@ export default function BookingClient({ venue, user }) {
     setErrorLog(null);
     setSelectedSlot(null); 
 
-    try {
-      const { data: fieldData, error: fieldError } = await supabase
-        .from('fields')
-        .select('id, name, price_per_hour')
-        .eq('venue_id', venue.id)
-        .limit(1)
-        .single();
-
-      if (fieldError || !fieldData) {
-        throw new Error("Arena ini belum mendaftarkan entitas lapangan yang valid.");
-      }
-
-      const { data: slotData, error: slotError } = await supabase
-        .from('slots')
-        .select('id, field_id, slot_date, start_time, end_time, status, locked_until')
-        .eq('field_id', fieldData.id)
-        .eq('slot_date', dateStr)
-        .order('start_time', { ascending: true });
-
-      if (slotError) throw slotError;
-      
-      setSlots((slotData || []).map(s => ({
-        ...s,
-        price: fieldData.price_per_hour,
-        fieldName: fieldData.name
-      })));
-    } catch (err) {
-      console.error("Sinkronisasi Jadwal Gagal:", err);
-      setErrorLog(err.message || "Gagal memuat jadwal matriks ketersediaan.");
-    } finally {
-      setLoadingSlots(false);
+    const { slots: fetchedSlots, error } = await getAvailableSlots(supabase, venue.id, dateStr);
+    
+    if (error) {
+      setErrorLog(error);
+    } else {
+      setSlots(fetchedSlots);
     }
+    
+    setLoadingSlots(false);
   }, [venue.id]);
 
   useEffect(() => {

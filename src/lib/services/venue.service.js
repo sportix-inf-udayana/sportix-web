@@ -1,42 +1,37 @@
-export async function getVerifiedVenues(supabase) {
+export async function getAvailableSlots(supabase, venueId, dateStr) {
   try {
-    const { data: venues, error } = await supabase
-      .from("venues")
-      .select("id, name, address, status, rating, fields(price_per_hour, sport_type)")
-      .eq("status", "APPROVED")
-      .order("created_at", { ascending: false });
+    const { data: fieldData, error: fieldError } = await supabase
+      .from('fields')
+      .select('id, name, price_per_hour')
+      .eq('venue_id', venueId)
+      .limit(1)
+      .single();
 
-    if (error) throw error;
+    if (fieldError || !fieldData) {
+      throw new Error("Arena ini belum mendaftarkan entitas lapangan yang valid.");
+    }
 
-    return (venues || []).map((v) => {
-      const prices = v.fields?.map(f => Number(f.price_per_hour)) || [];
-      const minPrice = prices.length ? Math.min(...prices) : 0;
-      const sports = [...new Set(v.fields?.map(f => f.sport_type).filter(Boolean))];
+    const { data: slotData, error: slotError } = await supabase
+      .from('slots')
+      .select('id, field_id, slot_date, start_time, end_time, status, locked_until')
+      .eq('field_id', fieldData.id)
+      .eq('slot_date', dateStr)
+      .order('start_time', { ascending: true });
 
-      return {
-        id: v.id,
-        name: v.name,
-        location: v.address || "Bali, Indonesia",
-        image: "/image/venue-fallback.svg", 
-        rating: v.rating || 5.0, 
-        price: minPrice ? `IDR ${minPrice.toLocaleString('id-ID')} / Jam` : "N/A",
-        sport: sports.join(", ") || "Umum",
-        tags: ["Verified", "Cashless"]
-      };
-    });
-  } catch (err) {
-    console.error("Critical Failure in Venue Service:", err);
-    return [];
-  }
-}
+    if (slotError) throw slotError;
+    
+    const slots = (slotData || []).map(s => ({
+      ...s,
+      price: fieldData.price_per_hour,
+      fieldName: fieldData.name
+    }));
 
-export async function getVenueById(supabase, id) {
-  try {
-    const { data, error } = await supabase.from("venues").select("*").eq("id", id).single();
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    console.error(`Error fetching venue ${id}:`, err);
-    return null;
+    return { slots, error: null };
+  } catch (error) {
+    console.error("Sinkronisasi Jadwal Gagal:", error);
+    return { 
+      slots: [], 
+      error: error.message || "Gagal memuat jadwal matriks ketersediaan." 
+    };
   }
 }

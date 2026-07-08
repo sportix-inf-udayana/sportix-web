@@ -1,3 +1,39 @@
+export async function getVenueList(supabase) {
+  try {
+    const { data: venues, error } = await supabase
+      .from("venues")
+      .select("id, name, address, description, rating, fields(price_per_hour, sport_type)")
+      .eq("status", "APPROVED")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const formattedVenues = (venues || []).map(v => {
+      const prices = v.fields?.map(f => Number(f.price_per_hour)) || [];
+      const minPrice = prices.length ? Math.min(...prices) : 0;
+      
+      const allSports = v.fields?.map(f => f.sport_type).filter(Boolean) || [];
+      const sports = allSports.filter((item, index) => allSports.indexOf(item) === index);
+
+      return {
+        id: v.id,
+        name: v.name,
+        location: v.address || "Lokasi tidak diketahui",
+        description: v.description,
+        image: "/image/hero-arena.jpg",
+        rating: v.rating || 5.0,
+        price: minPrice ? `Rp ${minPrice.toLocaleString('id-ID')}/Jam` : "N/A",
+        sport: sports.length > 0 ? sports[0] : "Umum",
+      };
+    });
+
+    return { venues: formattedVenues, error: null };
+  } catch (error) {
+    console.error("Fetch Venue List Error:", error);
+    return { venues: [], error };
+  }
+}
+
 export async function getVenueDetail(supabase, venueId) {
   try {
     const { data, error } = await supabase
@@ -35,7 +71,7 @@ export async function getUmkmCatalog(supabase) {
         price: p.price,
         stock: p.stock,
         desc: p.description || "Perlengkapan olahraga lokal.",
-        image: p.image_url || "/image/hero-arena.jpg" // Fallback ke gambar lokal
+        image: p.image_url || "/image/hero-arena.jpg"
       })), 
       error: null 
     };
@@ -57,7 +93,6 @@ export async function getUserTicketHistory(supabase, userId) {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-
     const safeTickets = tickets || [];
     
     return { 
