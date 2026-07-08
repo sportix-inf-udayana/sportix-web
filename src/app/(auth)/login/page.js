@@ -32,15 +32,13 @@ export default async function LoginPage({ searchParams }) {
   const callbackUrl = searchParams?.callback || "/";
 
   return (
-    <div className="min-h-screen w-full flex bg-background font-sans">
-      <div className="hidden lg:flex w-1/2 bg-zinc-950 relative items-center justify-center border-r border-zinc-800">
-        <LoginBanner />
+    <div className="min-h-screen w-full flex bg-zinc-950 font-sans">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 order-2 lg:order-1">
+        <LoginForm callbackUrl={callbackUrl} />
       </div>
 
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12">
-        <div className="w-full max-w-md space-y-8">
-          <LoginForm callbackUrl={callbackUrl} />
-        </div>
+      <div className="hidden lg:flex w-1/2 bg-zinc-900 relative items-center justify-center order-1 lg:order-2 border-l border-zinc-800">
+         <LoginBanner />
       </div>
     </div>
   );
