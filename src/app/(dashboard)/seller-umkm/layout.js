@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import UmkmHeader from "../../../../components/umkm/UmkmHeader";
-import DashboardFooter from "../../../../components/dashboard/DashboardFooter";
+import UmkmHeader from "../../../components/umkm/UmkmHeader";
+import DashboardFooter from "../../../components/dashboard/DashboardFooter";
 
 export default async function SellerUmkmLayout({ children }) {
   const cookieStore = cookies();

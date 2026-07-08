@@ -27,7 +27,7 @@ export default async function UmkmConsignmentPage() {
               <ShoppingBag className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-white font-display tracking-tight uppercase">Consignment Shop</h1>
+              <h1 className="text-2xl font-black text-white font-display tracking-tight uppercase">Sports Store</h1>
               <p className="text-zinc-500 text-[10px] uppercase tracking-widest font-mono mt-0.5">
                 Pusat Perlengkapan Ekosistem UMKM Sportix
               </p>

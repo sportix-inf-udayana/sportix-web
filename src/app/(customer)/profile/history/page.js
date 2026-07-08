@@ -59,7 +59,7 @@ export default async function ProfileHistoryPage() {
               <Award className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-white font-display uppercase tracking-tight">Athlete Dossier</h1>
+              <h1 className="text-2xl font-black text-white font-display uppercase tracking-tight">Profile Athlete</h1>
               <p className="text-zinc-500 text-[10px] uppercase tracking-widest font-mono mt-0.5">
                 Kelola riwayat kompetisi dan tiket akses aktif
               </p>
@@ -77,8 +77,6 @@ export default async function ProfileHistoryPage() {
             </span>
             <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand-emerald" />
           </div>
-          <Link href="/tournaments" className="pb-4 text-sm font-semibold text-zinc-500 hover:text-white transition-colors">Tournaments</Link>
-          <Link href="/umkm" className="pb-4 text-sm font-semibold text-zinc-500 hover:text-white transition-colors">Consignment Shop</Link>
         </div>
 
         <div className="space-y-8">

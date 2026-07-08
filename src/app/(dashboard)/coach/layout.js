@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import CoachHeader from "../../../../components/coach/CoachHeader";
-import DashboardFooter from "../../../../components/dashboard/DashboardFooter";
+import CoachHeader from "../../../components/coach/CoachHeader";
+import DashboardFooter from "../../../components/dashboard/DashboardFooter";
 
 export default async function CoachLayout({ children }) {
   const cookieStore = cookies();
