@@ -43,16 +43,6 @@ export default async function UmkmConsignmentPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 mt-8">
-        <div className="flex border-b border-zinc-900 gap-6 mb-8">
-          <Link href="/profile/history" className="pb-4 text-sm font-semibold text-zinc-500 hover:text-white transition-colors">
-            Tickets & Booking
-          </Link>
-          <div className="pb-4 text-sm font-bold text-brand-emerald relative">
-            Shop UMKM
-            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-brand-emerald" />
-          </div>
-        </div>
-
         <UmkmCatalogClient initialProducts={products} />
       </div>
     </div>

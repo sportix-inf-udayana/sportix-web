@@ -57,7 +57,7 @@ export default function AdminVenueHeader({ venueName = "Venue" }) {
                 pathname.includes('/slots') ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
               )}
             >
-              <Grid className={cn("w-4 h-4", pathname.includes('/slots') && "text-brand-emerald")} />
+              <Grid className={cn("w-4 h-4", pathname.includes('/slots') && "text-blue-400")} />
               <span>SLOT MATRIX</span>
             </Link>
             <Link 
@@ -67,7 +67,7 @@ export default function AdminVenueHeader({ venueName = "Venue" }) {
                 pathname.includes('/scan') ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
               )}
             >
-              <ScanBarcode className={cn("w-4 h-4", pathname.includes('/scan') && "text-purple-400")} />
+              <ScanBarcode className={cn("w-4 h-4", pathname.includes('/scan') && "text-blue-400")} />
               <span>SCANNER GATE</span>
             </Link>
             <Link 
@@ -77,19 +77,19 @@ export default function AdminVenueHeader({ venueName = "Venue" }) {
                 pathname.includes('/reports') ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-300"
               )}
             >
-              <BarChart4 className={cn("w-4 h-4", pathname.includes('/reports') && "text-amber-400")} />
+              <BarChart4 className={cn("w-4 h-4", pathname.includes('/reports') && "text-blue-400")} />
               <span>REPORTS</span>
             </Link>
           </div>
 
           <div className="flex items-center gap-3 pl-0 md:pl-4 border-t md:border-t-0 md:border-l border-zinc-800 pt-4 md:pt-0 w-full md:w-auto justify-between md:justify-start">
-            <Link href="/profile" className="flex items-center gap-3 group cursor-pointer">
-              <div className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center group-hover:border-brand-emerald transition-colors">
-                <User className="w-4 h-4 text-zinc-500 group-hover:text-brand-emerald transition-colors" />
+            <Link href="/profile" className="flex items-center gap-3 group cursor-pointer px-3 py-2 rounded-lg hover:bg-zinc-900 transition-colors">
+              <div className="w-9 h-9 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center group-hover:border-blue-500 transition-colors">
+                <User className="w-4 h-4 text-zinc-400 group-hover:text-blue-400 transition-colors" />
               </div>
               <div className="text-left">
-                <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-500 block leading-none uppercase mb-1">VENUE ADMIN</span>
-                <span className="text-xs font-bold text-white max-w-[120px] truncate block group-hover:text-brand-emerald transition-colors">
+                <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-500 block leading-none uppercase mb-1">VENUE ADMIN</span>
+                <span className="text-xs font-bold text-white max-w-[110px] truncate block group-hover:text-blue-400 transition-colors">
                   {currentUser?.user_metadata?.full_name || "Memuat..."}
                 </span>
               </div>
@@ -97,7 +97,7 @@ export default function AdminVenueHeader({ venueName = "Venue" }) {
             
             <button 
               onClick={handleLogout}
-              className="bg-zinc-900 hover:bg-red-950/40 border border-zinc-800 hover:border-red-500/30 text-zinc-500 hover:text-red-400 p-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center"
+              className="bg-zinc-900 hover:bg-blue-950/40 border border-zinc-800 hover:border-blue-500/50 text-zinc-400 hover:text-blue-400 p-2.5 rounded-lg transition-all cursor-pointer flex items-center justify-center shadow-sm"
               title="Akhiri Sesi Operasional"
             >
               <LogOut className="w-4 h-4" />
