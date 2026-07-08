@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import AdminVenueHeader from "../../../components/admin-venue/AdminVenueHeader";
 import DashboardFooter from "../../../components/dashboard/DashboardFooter";
-import { USER_ROLES, ENTITY_STATUS } from "../../../lib/constants";
+import { USER_ROLES } from "../../../lib/constants";
 
 export default async function AdminVenueLayout({ children }) {
   const cookieStore = cookies();
@@ -14,23 +14,18 @@ export default async function AdminVenueLayout({ children }) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user || user.user_metadata?.role !== USER_ROLES.ADMIN_VENUE) {
-    redirect("/login");
-  }
+  if (!user || user.user_metadata?.role !== USER_ROLES.ADMIN_VENUE) redirect("/login");
 
+  // HANYA ambil nama untuk Header, TANPA redirect
   const { data: venue } = await supabase
     .from("venues")
-    .select("name, status")
+    .select("name")
     .eq("owner_id", user.id)
     .maybeSingle();
 
-  if (!venue) redirect("/admin-venue/onboarding");
-  if (venue.status === ENTITY_STATUS.PENDING) redirect("/admin-venue/pending");
-
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col font-sans text-white">
-      <AdminVenueHeader venueName={venue.name} />
+      <AdminVenueHeader venueName={venue?.name || "Setup Akun"} />
       <main className="flex-1 w-full max-w-7xl mx-auto px-6 py-8">
         {children}
       </main>
