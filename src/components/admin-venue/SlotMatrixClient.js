@@ -14,7 +14,7 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-export default function SlotMatrixClient({ initialSlots, venueId }) {
+export default function SlotMatrixClient({ initialSlots }) {
   const [slots, setSlots] = useState(initialSlots || []);
   const [updatingId, setUpdatingId] = useState(null);
   const [globalError, setGlobalError] = useState(null);

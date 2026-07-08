@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
 import ProductCatalogClient from "../../../../components/umkm/ProductCatalogClient";
+import { USER_ROLES, ENTITY_STATUS } from "../../../../lib/constants";
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,12 @@ export default async function UmkmProductsPage() {
   );
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user || user.user_metadata?.role !== 'UMKM_SELLER') redirect("/login");
+  if (authError || !user || user.user_metadata?.role !== USER_ROLES.UMKM_SELLER) redirect("/login");
+
+  // PROTEKSI ONBOARDING
+  const { data: store } = await supabase.from("umkm_stores").select("status").eq("owner_id", user.id).maybeSingle();
+  if (!store) redirect("/seller-umkm/onboarding");
+  if (store.status === ENTITY_STATUS.PENDING) redirect("/seller-umkm/pending");
 
   const { data: products, error: productError } = await supabase
     .from("umkm_products")

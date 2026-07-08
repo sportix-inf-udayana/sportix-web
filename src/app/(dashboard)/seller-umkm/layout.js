@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import UmkmHeader from "../../../components/umkm/UmkmHeader";
 import DashboardFooter from "../../../components/dashboard/DashboardFooter";
+import { USER_ROLES } from "../../../lib/constants";
 
 export default async function SellerUmkmLayout({ children }) {
   const cookieStore = cookies();
@@ -13,16 +14,7 @@ export default async function SellerUmkmLayout({ children }) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user || user.user_metadata?.role !== 'UMKM_SELLER') redirect("/login");
-
-  const { data: store } = await supabase
-    .from("umkm_stores")
-    .select("status")
-    .eq("owner_id", user.id)
-    .maybeSingle();
-
-  if (!store) redirect("/seller-umkm/onboarding");
-  if (store.status === "PENDING") redirect("/seller-umkm/pending");
+  if (!user || user.user_metadata?.role !== USER_ROLES.UMKM_SELLER) redirect("/login");
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col font-sans text-white">
