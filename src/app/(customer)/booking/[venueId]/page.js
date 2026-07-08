@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
 import BookingClient from "../../../../components/booking/BookingClient";
+import { getVenueDetail } from "../../../../lib/services/customer.service";
 
 export const dynamic = 'force-dynamic';
 
@@ -16,11 +17,8 @@ export default async function BookingPage({ params }) {
     { cookies: { getAll: () => cookieStore.getAll() } }
   );
 
-  const { data: venue, error: venueError } = await supabase
-    .from("venues")
-    .select("id, name, address, status")
-    .eq("id", venueId)
-    .single();
+  // Ambil data menggunakan Service
+  const { data: venue, error: venueError } = await getVenueDetail(supabase, venueId);
 
   if (venueError || !venue || venue.status !== "APPROVED") {
     redirect(`/venues/${venueId}?error=unavailable`);
