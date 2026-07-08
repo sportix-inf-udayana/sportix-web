@@ -1,31 +1,24 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getSupabaseUser } from "../../../../lib/supabase";
+import { createServerClient } from "@supabase/ssr";
 import SlotMatrixClient from "../../../../components/admin-venue/SlotMatrixClient";
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminVenueSlotsPage() {
   const cookieStore = cookies();
-  
-  // Ekstraksi JWT untuk ditanamkan ke dalam header kueri PostgreSQL
-  const allCookies = cookieStore.getAll();
-  const authCookie = allCookies.find(c => c.name.includes("auth-token"));
-  const token = authCookie ? authCookie.value : "";
-  
-  const supabase = getSupabaseUser(token);
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    { cookies: { getAll: () => cookieStore.getAll() } }
+  );
 
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user || user.user_metadata?.role !== 'ADMIN_VENUE') redirect("/login");
 
-  // RLS menjamin inner join venues hanya mengembalikan lapangan milik auth.uid()
-  // Data kompetitor tidak akan bisa di-bypass meskipun parameter URL dimanipulasi
   const { data: fields, error: fieldError } = await supabase
     .from("fields")
-    .select(`
-      id, name, type,
-      venues!inner ( id, name )
-    `)
+    .select("id, name, type, venues!inner(id, name)")
     .order("name");
 
   if (fieldError) {
@@ -42,8 +35,6 @@ export default async function AdminVenueSlotsPage() {
         <h1 className="text-2xl font-black text-white font-display uppercase">Matriks Operasional Slot</h1>
         <p className="text-zinc-500 text-xs font-mono mt-1">Multi-tenant isolation active. Inventaris kompetitor disembunyikan otomatis.</p>
       </div>
-
-      {/* Mendelegasikan interaktivitas state ke Client Component murni */}
       <SlotMatrixClient initialFields={fields || []} />
     </div>
   );

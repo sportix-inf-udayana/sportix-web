@@ -1,17 +1,18 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getSupabaseUser } from "../../../../lib/supabase";
+import { createServerClient } from "@supabase/ssr";
 import ReportSummaryCards from "../../../../components/admin-venue/ReportSummaryCards";
 import TransactionTable from "../../../../components/admin-venue/TransactionTable";
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminVenueReportsPage() {
   const cookieStore = cookies();
-  
-  const allCookies = cookieStore.getAll();
-  const authCookie = allCookies.find(c => c.name.includes("auth-token"));
-  const token = authCookie ? authCookie.value : "";
-  
-  const supabase = getSupabaseUser(token);
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    { cookies: { getAll: () => cookieStore.getAll() } }
+  );
   
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) redirect("/login");
@@ -46,18 +47,12 @@ export default async function AdminVenueReportsPage() {
 
   return (
     <div className="space-y-6 text-white font-mono">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">LAPORAN FINANSIAL VENUE</h1>
+      <div className="border-b border-zinc-800 pb-4">
+        <h1 className="text-2xl font-bold tracking-tight text-white uppercase">Laporan Finansial Venue</h1>
         <p className="text-xs text-zinc-500 mt-1">Sistem perlindungan data otomatis berbasis Row Level Security (RLS) aktif.</p>
       </div>
 
-      {/* Komponen Kartu Ringkasan */}
-      <ReportSummaryCards 
-        totalRevenue={totalRevenue} 
-        transactionCount={transactions?.length || 0} 
-      />
-
-      {/* Komponen Tabel Utama */}
+      <ReportSummaryCards totalRevenue={totalRevenue} transactionCount={transactions?.length || 0} />
       <TransactionTable transactions={transactions} />
     </div>
   );

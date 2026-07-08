@@ -1,29 +1,43 @@
 import React from "react";
-import { Calendar } from "lucide-react";
+import { clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
 
-export default function DateCarousel({ dates, selectedDate, onSelectDate }) {
+const cn = (...inputs) => twMerge(clsx(inputs));
+
+export default function DateCarousel({ selectedDate, onSelectDate }) {
+  // Generate kalender dinamis 14 hari ke depan
+  const dates = Array.from({ length: 14 }).map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    return {
+      full: d.toISOString().split('T')[0],
+      dayName: d.toLocaleDateString('id-ID', { weekday: 'short' }),
+      dateNum: d.getDate(),
+      monthName: d.toLocaleDateString('id-ID', { month: 'short' })
+    };
+  });
+
   return (
-    <div className="glass-panel rounded-2xl p-4 mb-8">
-      <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-3.5 flex items-center gap-1.5">
-        <Calendar className="w-3.5 h-3.5 text-brand-neon" /> SELECT PLAY DATE
-      </h3>
-      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-        {dates.map((d) => (
+    <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-none snap-x font-sans">
+      {dates.map((d, idx) => {
+        const isSelected = selectedDate === d.full;
+        return (
           <button
-            key={d.label}
-            onClick={() => onSelectDate(d.label)}
-            className={`flex flex-col items-center justify-between p-3 rounded-lg border transition-all duration-200 shrink-0 min-w-[70px] cursor-pointer ${
-              selectedDate === d.label
-                ? "bg-surface-elevated border-brand-emerald text-white"
-                : "bg-surface border-zinc-800/60 text-zinc-400 hover:border-zinc-700"
-            }`}
+            key={idx}
+            onClick={() => onSelectDate(d.full)}
+            className={cn(
+              "snap-start shrink-0 flex flex-col items-center justify-center w-16 h-20 rounded-2xl border transition-all cursor-pointer font-mono",
+              isSelected
+                ? "bg-brand-emerald text-black border-brand-emerald shadow-[0_0_15px_rgba(16,185,129,0.2)] scale-105"
+                : "bg-zinc-900 text-zinc-500 border-zinc-800 hover:border-zinc-700 hover:text-white"
+            )}
           >
-            <span className="text-micro font-mono uppercase tracking-widest">{d.day}</span>
-            <span className="text-lg font-bold my-1">{d.num}</span>
-            <span className="text-micro font-mono tracking-tighter text-zinc-500">{d.sub}</span>
+            <span className="text-[10px] uppercase font-bold tracking-wider mb-1">{d.dayName}</span>
+            <span className="text-xl font-black font-display leading-none">{d.dateNum}</span>
+            <span className="text-[10px] uppercase tracking-wider mt-1">{d.monthName}</span>
           </button>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }

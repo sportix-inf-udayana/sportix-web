@@ -4,9 +4,9 @@ export async function getUmkmStoreAndProducts(supabase, userId) {
       .from("umkm_stores")
       .select("id, name, status, venues(name)")
       .eq("owner_id", userId)
-      .single();
+      .maybeSingle(); // Menggantikan .single() agar tidak throw error jika kosong
 
-    if (storeError && storeError.code !== "PGRST116") throw storeError; 
+    if (storeError) throw storeError; 
     if (!store) return { data: { store: null, products: [] }, error: null };
 
     const { data: products, error: productsError } = await supabase
@@ -33,9 +33,9 @@ export async function getUmkmOrders(supabase, userId) {
       .from("umkm_stores")
       .select("id")
       .eq("owner_id", userId)
-      .single();
+      .maybeSingle();
 
-    if (storeError && storeError.code !== "PGRST116") throw storeError;
+    if (storeError) throw storeError;
     if (!store) return { data: { store: null, orders: [] }, error: null };
 
     const { data: orders, error: ordersError } = await supabase

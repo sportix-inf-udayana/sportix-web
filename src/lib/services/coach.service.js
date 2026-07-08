@@ -32,10 +32,8 @@ export async function getCoachScheduleData(supabase, userId) {
     if (profileErr) throw profileErr;
     if (!coachProfile) return { data: { coachProfile: null }, error: null };
 
-    // Enforce localized WITA (Asia/Makassar) date to prevent UTC date-stripping anomalies
-    const options = { timeZone: 'Asia/Makassar', year: 'numeric', month: '2-digit', day: '2-digit' };
-    const formatter = new Intl.DateTimeFormat('fr-CA', options); // Format YYYY-MM-DD
-    const today = formatter.format(new Date());
+    // Format ISO lokal YYYY-MM-DD berbasis zona waktu WITA (Asia/Makassar)
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
 
     const [balanceRes, activityRes, scheduleRes] = await Promise.all([
       supabase.from("balances").select("available_balance").eq("user_id", userId).single(),

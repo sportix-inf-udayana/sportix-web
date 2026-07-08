@@ -9,18 +9,15 @@ export default async function UnifiedProfilePage() {
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { cookies: { getAll() { return cookieStore.getAll(); } } }
+    { cookies: { getAll: () => cookieStore.getAll() } }
   );
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
   const role = user.user_metadata?.role || "CUSTOMER";
 
-  // Distribusikan penempatan halaman profil agar menyatu secara harmonis dengan layout masing-masing sub-sistem
   switch (role) {
     case "SUPER_ADMIN":
       redirect("/super-admin/audits?view=profile");
@@ -31,6 +28,6 @@ export default async function UnifiedProfilePage() {
     case "UMKM_SELLER":
       redirect("/seller-umkm/products?view=profile");
     default:
-      redirect("/profile/history"); // Jalur riwayat transaksi pelanggan umum
+      redirect("/profile/history");
   }
 }

@@ -1,5 +1,5 @@
 import { Inter, Space_Grotesk, JetBrains_Mono } from 'next/font/google';
-import Script from 'next/script'; // Modul injeksi script
+import Script from 'next/script';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -20,14 +20,14 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="id" className={`${inter.variable} ${space.variable} ${mono.variable} scroll-smooth`}>
-      <body className="antialiased bg-background text-foreground font-sans min-h-screen">
+      <body className="antialiased bg-zinc-950 text-white font-sans min-h-screen">
         {children}
         
         {/* INJEKSI MESIN MIDTRANS (SANDBOX MODE) */}
         <Script
           src="https://app.sandbox.midtrans.com/snap/snap.js"
           data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
-          strategy="lazyOnload" // Hanya dimuat saat thread browser kosong agar tidak memperlambat First Paint
+          strategy="lazyOnload"
         />
       </body>
     </html>

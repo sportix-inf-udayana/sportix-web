@@ -1,35 +1,32 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getSupabaseUser } from "../../../../lib/supabase";
+import { createServerClient } from "@supabase/ssr";
 import WithdrawalClientWrapper from "../../../../components/coach/WithdrawalClientWrapper";
 
 export const dynamic = 'force-dynamic';
 
 export default async function CoachWalletPage() {
   const cookieStore = cookies();
-  
-  // Ekstraksi token untuk penegakan RLS PostgreSQL
-  const allCookies = cookieStore.getAll();
-  const authCookie = allCookies.find(c => c.name.includes("auth-token"));
-  const token = authCookie ? authCookie.value : "";
-  
-  const supabase = getSupabaseUser(token);
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    { cookies: { getAll: () => cookieStore.getAll() } }
+  );
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user || user.user_metadata?.role !== 'COACH') redirect("/login");
 
-  // RLS menjamin query ini hanya bisa mengakses row milik user.id
+  // RLS menjamin query ini hanya bisa mengakses row berelasi foreign-key user_id
   const { data: coach } = await supabase
     .from("coaches")
     .select("status")
-    .eq("id", user.id) // Konsistensi PK coach
+    .eq("user_id", user.id) // Diperbaiki dari eq('id', user.id)
     .maybeSingle();
 
   if (!coach) redirect("/coach/onboarding");
   if (coach.status === 'PENDING') redirect("/coach/pending");
   if (coach.status === 'REJECTED') redirect("/coach/onboarding");
 
-  // Kueri saldo terenkapsulasi RLS
   const { data: balanceData } = await supabase
     .from("balances")
     .select("available_balance, pending_balance")
