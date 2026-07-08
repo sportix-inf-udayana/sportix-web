@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
-import ProductCatalogClient from "../../../components/umkm/ProductCatalogClient";
+import ProductCatalogClient from "../../../../components/umkm/ProductCatalogClient";
 
 export const dynamic = 'force-dynamic';
 
