@@ -21,12 +21,16 @@ export default async function UnifiedProfilePage() {
   switch (role) {
     case "SUPER_ADMIN":
       redirect("/super-admin/audits?view=profile");
+      break;
     case "ADMIN_VENUE":
       redirect("/admin-venue/reports?view=profile");
+      break;
     case "COACH":
       redirect("/coach/wallet?view=profile");
+      break;
     case "UMKM_SELLER":
       redirect("/seller-umkm/products?view=profile");
+      break;
     default:
       redirect("/profile/history");
   }

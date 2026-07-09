@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import CoachHeader from "../../../components/coach/CoachHeader";
 import DashboardFooter from "../../../components/dashboard/DashboardFooter";
+import { USER_ROLES } from "../../../lib/constants";
 
 export default async function CoachLayout({ children }) {
   const cookieStore = cookies();
@@ -13,16 +14,7 @@ export default async function CoachLayout({ children }) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user || user.user_metadata?.role !== 'COACH') redirect("/login");
-
-  const { data: coach } = await supabase
-    .from("coaches")
-    .select("status")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (!coach) redirect("/coach/onboarding");
-  if (coach.status === "PENDING") redirect("/coach/pending");
+  if (!user || user.user_metadata?.role !== USER_ROLES.COACH) redirect("/login");
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col font-sans text-white">

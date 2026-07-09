@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
 import ReportSummaryCards from "../../../../components/admin-venue/ReportSummaryCards";
 import TransactionTable from "../../../../components/admin-venue/TransactionTable";
+import { USER_ROLES, ENTITY_STATUS } from "../../../../lib/constants";
 
 export const dynamic = 'force-dynamic';
 
@@ -15,43 +16,26 @@ export default async function AdminVenueReportsPage() {
   );
   
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) redirect("/login");
+  if (authError || !user || user.user_metadata?.role !== USER_ROLES.ADMIN_VENUE) redirect("/login");
+
+  // PROTEKSI ONBOARDING/PENDING
+  const { data: venue } = await supabase.from("venues").select("status").eq("owner_id", user.id).maybeSingle();
+  if (!venue) redirect("/admin-venue/onboarding");
+  if (venue.status === ENTITY_STATUS.PENDING) redirect("/admin-venue/pending");
 
   const { data: transactions, error: dataError } = await supabase
     .from("ledger_transactions")
-    .select(`
-      id,
-      transaction_type,
-      source,
-      amount,
-      created_at,
-      reservations (
-        booking_date,
-        start_time,
-        fields ( name )
-      )
-    `)
+    .select("id, transaction_type, source, amount, created_at, reservation_id")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
-  if (dataError) {
-    return (
-      <div className="bg-red-950/20 border border-red-900 text-red-400 p-4 rounded-lg font-mono text-sm">
-        [DATABASE ERROR]: Gagal memuat audit log finansial: {dataError.message}
-      </div>
-    );
-  }
+  if (dataError) return <div className="text-red-400 p-4">[ERROR]: {dataError.message}</div>;
 
-  const totalRevenue = transactions
-    ?.filter(tx => tx.transaction_type === "CREDIT")
-    ?.reduce((sum, tx) => sum + (tx.amount || 0), 0) || 0;
+  const totalRevenue = transactions?.filter(tx => tx.transaction_type === "CREDIT")?.reduce((sum, tx) => sum + (tx.amount || 0), 0) || 0;
 
   return (
     <div className="space-y-6 text-white font-mono">
-      <div className="border-b border-zinc-800 pb-4">
-        <h1 className="text-2xl font-bold tracking-tight text-white uppercase">Laporan Finansial Venue</h1>
-        <p className="text-xs text-zinc-500 mt-1">Sistem perlindungan data otomatis berbasis Row Level Security (RLS) aktif.</p>
-      </div>
-
+      <h1 className="text-2xl font-bold uppercase">Laporan Finansial</h1>
       <ReportSummaryCards totalRevenue={totalRevenue} transactionCount={transactions?.length || 0} />
       <TransactionTable transactions={transactions} />
     </div>
