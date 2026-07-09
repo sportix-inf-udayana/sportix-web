@@ -19,16 +19,21 @@ export default async function SuperAdminVerificationsPage() {
     redirect("/login");
   }
 
-  // Tarik data pendaftaran pending dari seluruh klaster kemitraan secara serentak
+  // FAIL-SAFE: Menghapus join ke tabel users untuk menghindari error RLS/Foreign Key
   const [venuesRes, coachesRes, storesRes] = await Promise.all([
     supabase.from("venues").select("id, name, address").eq("status", "PENDING"),
-    supabase.from("coaches").select("id, full_name, specialization").eq("status", "PENDING"),
+    supabase.from("coaches").select("id, specialization").eq("status", "PENDING"),
     supabase.from("umkm_stores").select("id, name, address").eq("status", "PENDING")
   ]);
 
   const unifiedPendingQueue = [
     ...(venuesRes.data || []).map(v => ({ ...v, type: "VENUE" })),
-    ...(coachesRes.data || []).map(c => ({ id: c.id, name: c.full_name, address: c.specialization, type: "COACH" })),
+    ...(coachesRes.data || []).map(c => ({ 
+      id: c.id, 
+      name: "Instruktur", 
+      address: c.specialization, 
+      type: "COACH" 
+    })),
     ...(storesRes.data || []).map(s => ({ ...s, type: "UMKM_STORE" }))
   ];
 

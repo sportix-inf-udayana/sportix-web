@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuthAndCatch } from "../../../lib/api-wrapper";
 import { getSupabaseAdmin } from "../../../lib/supabase";
-import { ROLE } from "../../../lib/constants";
+import { USER_ROLES } from "../../../lib/constants"; 
 
 const verificationSchema = z.object({
   entityId: z.string().uuid("ID Entitas tidak valid"),
@@ -10,7 +10,6 @@ const verificationSchema = z.object({
   action: z.enum(['APPROVE', 'REJECT'])
 });
 
-// Object Map untuk menggantikan ternary bersarang
 const TABLE_MAP = {
   VENUE: 'venues',
   COACH: 'coaches',
@@ -18,7 +17,8 @@ const TABLE_MAP = {
 };
 
 async function verificationHandler(req, { user }) {
-  if (user.user_metadata?.role !== ROLE.SUPER_ADMIN) {
+  // FIX: Gunakan USER_ROLES.SUPER_ADMIN
+  if (user.user_metadata?.role !== USER_ROLES.SUPER_ADMIN) {
     return NextResponse.json({ success: false, message: "Forbidden. Membutuhkan akses Super Admin." }, { status: 403 });
   }
 
@@ -41,12 +41,11 @@ async function verificationHandler(req, { user }) {
   if (updateErr || !targetEntity) throw updateErr;
 
   if (newStatus === 'APPROVED') {
-    // Dynamic fallback field (owner_id atau user_id) 
     const targetUserId = targetEntity.owner_id || targetEntity.user_id;
     if (targetUserId) {
       const { data: existingBalance } = await supabase.from("balances").select("id").eq("user_id", targetUserId).maybeSingle();
       if (!existingBalance) {
-        await supabase.from("balances").insert({ user_id: targetUserId, available_balance: 0, pending_balance: 0 });
+        await supabase.from("balances").insert({ user_id: targetUserId, amount: 0 });
       }
     }
   }
