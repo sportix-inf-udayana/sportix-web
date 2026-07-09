@@ -1,8 +1,10 @@
 {
-  "extends": [
-    "next/core-web-vitals",
-    "eslint:recommended"
-  ],
+  "extends": "next/core-web-vitals",
+  "env": {
+    "es6": true,
+    "browser": true,
+    "node": true
+  },
   "rules": {
     "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
     "no-console": ["warn", { "allow": ["warn", "error"] }],
