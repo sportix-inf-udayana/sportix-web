@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
 import SlotMatrixClient from "../../../../components/admin-venue/SlotMatrixClient";
+import { USER_ROLES, ENTITY_STATUS } from "../../../../lib/constants";
 
 export const dynamic = 'force-dynamic';
 
@@ -14,11 +15,17 @@ export default async function AdminVenueSlotsPage() {
   );
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user || user.user_metadata?.role !== 'ADMIN_VENUE') redirect("/login");
+  if (authError || !user || user.user_metadata?.role !== USER_ROLES.ADMIN_VENUE) redirect("/login");
 
+  // PROTEKSI EKSPLISIT YANG SEBELUMNYA ANDA ABAIKAN
+  const { data: venue } = await supabase.from("venues").select("status").eq("owner_id", user.id).maybeSingle();
+  if (!venue) redirect("/admin-venue/onboarding");
+  if (venue.status === ENTITY_STATUS.PENDING) redirect("/admin-venue/pending");
+
+  // FIX: Mengubah 'type' menjadi 'sport_type'
   const { data: fields, error: fieldError } = await supabase
     .from("fields")
-    .select("id, name, type, venues!inner(id, name)")
+    .select("id, name, sport_type, venues!inner(id, name)")
     .order("name");
 
   if (fieldError) {

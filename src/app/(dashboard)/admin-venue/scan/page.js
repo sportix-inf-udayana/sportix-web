@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
 import ScannerClient from "../../../../components/admin-venue/ScannerClient";
+import { USER_ROLES, ENTITY_STATUS } from "../../../../lib/constants";
 
 export const dynamic = 'force-dynamic';
 
@@ -16,9 +17,14 @@ export default async function AdminVenueScanPage() {
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   
-  if (authError || !user || user.user_metadata?.role !== 'ADMIN_VENUE') {
+  if (authError || !user || user.user_metadata?.role !== USER_ROLES.ADMIN_VENUE) {
     redirect("/login");
   }
+
+  // PROTEKSI ONBOARDING
+  const { data: venue } = await supabase.from("venues").select("status").eq("owner_id", user.id).maybeSingle();
+  if (!venue) redirect("/admin-venue/onboarding");
+  if (venue.status === ENTITY_STATUS.PENDING) redirect("/admin-venue/pending");
 
   return (
     <div className="space-y-6 w-full text-white max-w-xl mx-auto">

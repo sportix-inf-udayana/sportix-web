@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
 import WithdrawalClientWrapper from "../../../../components/coach/WithdrawalClientWrapper";
+import { USER_ROLES, ENTITY_STATUS } from "../../../../lib/constants";
 
 export const dynamic = 'force-dynamic';
 
@@ -14,26 +15,31 @@ export default async function CoachWalletPage() {
   );
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user || user.user_metadata?.role !== 'COACH') redirect("/login");
+  
+  // Gunakan USER_ROLES.COACH dari constants
+  if (authError || !user || user.user_metadata?.role !== USER_ROLES.COACH) {
+    redirect("/login");
+  }
 
-  // RLS menjamin query ini hanya bisa mengakses row berelasi foreign-key user_id
   const { data: coach } = await supabase
     .from("coaches")
     .select("status")
-    .eq("user_id", user.id) // Diperbaiki dari eq('id', user.id)
-    .maybeSingle();
-
-  if (!coach) redirect("/coach/onboarding");
-  if (coach.status === 'PENDING') redirect("/coach/pending");
-  if (coach.status === 'REJECTED') redirect("/coach/onboarding");
-
-  const { data: balanceData } = await supabase
-    .from("balances")
-    .select("available_balance, pending_balance")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const safeBalance = balanceData || { available_balance: 0, pending_balance: 0 };
+  // Gunakan ENTITY_STATUS dari constants
+  if (!coach) redirect("/coach/onboarding");
+  if (coach.status === ENTITY_STATUS.PENDING) redirect("/coach/pending");
+  if (coach.status === ENTITY_STATUS.REJECTED) redirect("/coach/onboarding");
+
+  const { data: balanceData } = await supabase
+    .from("balances")
+    .select("amount") // Sesuaikan dengan kolom di skema SQL DDL Anda: 'amount'
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  // Pastikan key object sesuai dengan komponen WithdrawalClientWrapper
+  const safeBalance = balanceData || { amount: 0 };
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6 text-white font-sans">
