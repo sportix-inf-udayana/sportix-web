@@ -2,8 +2,8 @@ import React from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
-import ScannerClient from "../../../../components/admin-venue/ScannerClient";
-import { USER_ROLES, ENTITY_STATUS } from "../../../../lib/constants";
+import ScannerClient from "@/components/admin-venue/ScannerClient";
+import { ENTITY_STATUS } from "@/lib/constants";
 
 export const dynamic = 'force-dynamic';
 
@@ -15,14 +15,21 @@ export default async function AdminVenueScanPage() {
     { cookies: { getAll: () => cookieStore.getAll() } }
   );
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  // 1. GUNAKAN getSession() ALIH-ALIH getUser()
+  // Jauh lebih cepat karena membaca JWT. Middleware sudah memblokir akses ilegal.
+  const { data: { session } } = await supabase.auth.getSession();
   
-  if (authError || !user || user.user_metadata?.role !== USER_ROLES.ADMIN_VENUE) {
+  if (!session) {
     redirect("/login");
   }
 
-  // PROTEKSI ONBOARDING
-  const { data: venue } = await supabase.from("venues").select("status").eq("owner_id", user.id).maybeSingle();
+  // 2. PROTEKSI ONBOARDING
+  const { data: venue } = await supabase
+    .from("venues")
+    .select("status")
+    .eq("owner_id", session.user.id)
+    .maybeSingle();
+
   if (!venue) redirect("/admin-venue/onboarding");
   if (venue.status === ENTITY_STATUS.PENDING) redirect("/admin-venue/pending");
 
@@ -33,7 +40,8 @@ export default async function AdminVenueScanPage() {
         <p className="text-zinc-500 text-xs font-mono mt-1">Arahkan QR Code penyewa ke kamera untuk validasi instan.</p>
       </div>
 
-      <ScannerClient />
+      {/* 3. PROP PASSING: Eksekusi hasil refaktor komponen klien sebelumnya */}
+      <ScannerClient accessToken={session.access_token} />
     </div>
   );
 }
