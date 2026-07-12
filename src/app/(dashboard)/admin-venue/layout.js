@@ -1,9 +1,9 @@
+// src/app/(dashboard)/admin-venue/layout.js
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import AdminVenueHeader from "../../../components/admin-venue/AdminVenueHeader";
-import DashboardFooter from "../../../components/dashboard/DashboardFooter";
-import { USER_ROLES } from "../../../lib/constants";
+import AdminVenueHeader from "@/components/admin-venue/AdminVenueHeader";
+import DashboardFooter from "@/components/dashboard/DashboardFooter";
 
 export default async function AdminVenueLayout({ children }) {
   const cookieStore = cookies();
@@ -13,14 +13,15 @@ export default async function AdminVenueLayout({ children }) {
     { cookies: { getAll: () => cookieStore.getAll() } }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user || user.user_metadata?.role !== USER_ROLES.ADMIN_VENUE) redirect("/login");
+  // Sekali lagi, getSession sudah cukup untuk level UI presentation.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) redirect("/login");
 
-  // HANYA ambil nama untuk Header, TANPA redirect
+  // HANYA ambil nama untuk Header
   const { data: venue } = await supabase
     .from("venues")
     .select("name")
-    .eq("owner_id", user.id)
+    .eq("owner_id", session.user.id)
     .maybeSingle();
 
   return (
