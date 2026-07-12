@@ -1,10 +1,8 @@
-import { Loader2 } from "lucide-react";
-
-export default function DashboardLoading() {
+export default function AdminVenueLoading() {
   return (
-    <div className="min-h-[70vh] flex flex-col items-center justify-center gap-4 text-zinc-500 font-sans w-full">
-      <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-      <p className="text-xs font-mono font-bold tracking-widest uppercase">Membuka Akses Modul...</p>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] w-full">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+      <p className="text-gray-500 font-medium animate-pulse">Loading workspace...</p>
     </div>
   );
 }

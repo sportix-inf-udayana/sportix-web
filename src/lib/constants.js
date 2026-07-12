@@ -1,40 +1,17 @@
-export const USER_ROLES = {
-  SUPER_ADMIN: "SUPER_ADMIN",
-  ADMIN_VENUE: "ADMIN_VENUE",
-  COACH: "COACH",
-  UMKM_SELLER: "UMKM_SELLER",
-  CUSTOMER: "CUSTOMER"
-};
-
-export const ENTITY_STATUS = {
-  PENDING: "PENDING",
-  APPROVED: "APPROVED",
-  REJECTED: "REJECTED",
-  SUSPENDED: "SUSPENDED"
-};
-
-export const SLOT_STATUS = {
-  AVAILABLE: "AVAILABLE",
-  LOCKED: "LOCKED",
-  BOOKED: "BOOKED",
-  MAINTENANCE: "MAINTENANCE",
-  FORFEITED_NO_SHOW: "FORFEITED_NO_SHOW"
-};
-
-export const RESERVATION_STATUS = {
-  PENDING: "PENDING",
-  CONFIRMED: "CONFIRMED",
-  CHECKED_IN: "CHECKED_IN",
-  COMPLETED: "COMPLETED",
-  FORFEITED: "FORFEITED",
-  EXPIRED: "EXPIRED",
-  EXPIRED_PAID: "EXPIRED_PAID"
-};
-
-export const UMKM_ORDER_STATUS = {
-  PENDING_PAYMENT: "PENDING_PAYMENT",
-  PREPARING: "PREPARING",
-  SHIPPED: "SHIPPED",
-  COMPLETED: "COMPLETED",
-  CANCELLED: "CANCELLED"
+export const APP_CONFIG = {
+  baseUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+  routes: {
+    public: ['/', '/login', '/register'],
+    auth: {
+      login: '/login',
+      register: '/register',
+    },
+    protected: {
+      customer: '/profile',
+      admin: '/admin-venue',
+      coach: '/coach',
+      seller: '/seller-umkm',
+      superAdmin: '/super-admin'
+    }
+  }
 };

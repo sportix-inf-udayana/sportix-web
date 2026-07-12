@@ -1,34 +1,36 @@
-import React from "react";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-import { redirect } from "next/navigation";
-import BookingClient from "../../../../components/booking/BookingClient";
-import { getVenueDetail } from "../../../../lib/services/customer.service";
+import BookingClient from '@/components/booking/BookingClient';
+import { getVenueById } from '@/lib/services/customer.service';
+import { notFound } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
+export async function generateMetadata({ params }) {
+  const venue = await getVenueById(params.venueId);
+  if (!venue) return { title: 'Venue Not Found' };
+  
+  return {
+    title: `Book ${venue.name} - Sportix`,
+    description: venue.description,
+  };
+}
 
 export default async function BookingPage({ params }) {
   const { venueId } = params;
-  const cookieStore = cookies();
   
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { cookies: { getAll: () => cookieStore.getAll() } }
-  );
+  // Fetch data di server (0 waterfall di client)
+  const venueData = await getVenueById(venueId);
 
-  // Ambil data menggunakan Service
-  const { data: venue, error: venueError } = await getVenueDetail(supabase, venueId);
-
-  if (venueError || !venue || venue.status !== "APPROVED") {
-    redirect(`/venues/${venueId}?error=unavailable`);
+  if (!venueData) {
+    notFound();
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
-
   return (
-    <div className="min-h-screen bg-zinc-950 pt-24 px-4 sm:px-6 pb-20">
-      <BookingClient venue={venue} user={user} />
-    </div>
+    <main className="max-w-5xl mx-auto p-4 md:p-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">{venueData.name}</h1>
+        <p className="text-gray-500 mt-2">{venueData.address}</p>
+      </div>
+
+      {/* Oper data ke client component */}
+      <BookingClient initialVenueData={venueData} />
+    </main>
   );
 }

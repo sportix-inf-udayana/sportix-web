@@ -1,186 +1,52 @@
-"use client";
+'use client';
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import Link from "next/link";
-import { Loader2, Shield, User, Mail, Lock, Eye, EyeOff } from "lucide-react";
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
-
-const registerSchema = z.object({
-  fullName: z.string().min(3, "Nama lengkap minimal 3 karakter"),
-  email: z.string().email("Format email tidak valid"),
-  password: z.string().min(6, "Kata sandi minimal 6 karakter"),
-  role: z.enum(["CUSTOMER", "ADMIN_VENUE", "UMKM_SELLER", "COACH"], {
-    errorMap: () => ({ message: "Klasifikasi akun tidak valid" }),
-  }),
-});
+import { useState } from 'react';
+import { registerAction } from '@/app/(auth)/_actions';
 
 export default function RegisterForm() {
-  const router = useRouter();
-  const [authError, setAuthError] = useState(null);
-  const [success, setSuccess] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    resolver: zodResolver(registerSchema),
-    defaultValues: { role: "CUSTOMER" },
-  });
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
 
-  const onSubmit = async (data) => {
-    setAuthError(null);
-    try {
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: {
-            full_name: data.fullName,
-            role: data.role,
-          },
-        },
-      });
+    const formData = new FormData(e.currentTarget);
+    const result = await registerAction(formData);
 
-      if (signUpError) throw signUpError;
-
-      if (authData?.user) {
-        await supabase.auth.signOut();
-        setSuccess(true);
-        setTimeout(() => { router.push("/login"); }, 2000);
-      }
-    } catch (err) {
-      console.error("Registration engine fault:", err);
-      setAuthError(err?.message || "Terjadi kegagalan sistem yang tidak diketahui.");
+    if (result?.error) {
+      setError(result.error);
+      setIsLoading(false);
     }
   };
 
-  if (success) {
-    return (
-      <div className="w-full max-w-md text-center space-y-4 p-6 border border-brand-emerald/20 bg-brand-emerald/10 rounded-xl shadow-xl">
-        <h2 className="text-lg font-bold text-brand-emerald font-mono tracking-widest uppercase animate-pulse">
-          Registrasi Berhasil
-        </h2>
-        <p className="text-xs font-mono text-zinc-400 leading-relaxed">
-          Identitas kriptografi Anda telah diamankan. Mengalihkan Anda ke pintu masuk log in...
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="w-full max-w-md space-y-8">
-      <div className="text-center lg:text-left">
-        <Link href="/" className="font-display font-black text-2xl tracking-tight text-white inline-block mb-2">
-          SPORTIX<span className="text-brand-emerald">.</span>
-        </Link>
-        <h1 className="text-3xl font-bold tracking-tight text-white mt-4 uppercase">Daftar Akun</h1>
-        <p className="text-zinc-500 text-sm mt-2">
-          Bergabunglah dengan ekosistem olahraga otonom dan dapatkan akses ke jaringan arena terverifikasi.
-        </p>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full max-w-md">
+      {error && <div className="p-3 text-sm text-red-500 bg-red-100 rounded">{error}</div>}
+      
+      <div className="flex flex-col gap-1">
+        <label htmlFor="name">Full Name</label>
+        <input id="name" name="name" type="text" required className="border p-2 rounded" />
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 text-left font-sans">
-        {authError && (
-          <div className="p-3 bg-red-950/20 border border-red-500/20 rounded-lg text-[10px] font-mono tracking-widest uppercase text-red-400">
-            CRITICAL_ERROR: {authError}
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <label className="text-[10px] font-mono font-bold tracking-widest text-zinc-500 uppercase block">Nama Lengkap</label>
-          <div className="relative">
-            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
-            <input 
-              type="text" 
-              disabled={isSubmitting}
-              placeholder="Masukkan identitas lengkap" 
-              className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors disabled:opacity-50" 
-              {...register("fullName")}
-            />
-          </div>
-          {errors.fullName && <p className="text-red-400 text-xs mt-1">{errors.fullName.message}</p>}
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-[10px] font-mono font-bold tracking-widest text-zinc-500 uppercase block">Alamat Email</label>
-          <div className="relative">
-            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
-            <input 
-              type="email" 
-              disabled={isSubmitting}
-              placeholder="nama@domain.com" 
-              className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors disabled:opacity-50" 
-              {...register("email")}
-            />
-          </div>
-          {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-[10px] font-mono font-bold tracking-widest text-zinc-500 uppercase block">Kata Sandi</label>
-          <div className="relative">
-            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
-            <input 
-              type={showPassword ? "text" : "password"} 
-              disabled={isSubmitting}
-              placeholder="••••••••" 
-              className="w-full pl-10 pr-12 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors disabled:opacity-50" 
-              {...register("password")}
-            />
-            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-brand-emerald transition-colors cursor-pointer">
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>}
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-[10px] font-mono font-bold tracking-widest text-zinc-500 uppercase block">Klasifikasi Akun</label>
-          <div className="relative">
-            <Shield className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
-            <select 
-              disabled={isSubmitting}
-              className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors appearance-none font-sans cursor-pointer disabled:opacity-50"
-              {...register("role")}
-            >
-              <option value="CUSTOMER">Pelanggan (Customer)</option>
-              <option value="ADMIN_VENUE">Operator Lapangan (Admin Venue)</option>
-              <option value="UMKM_SELLER">Mitra Merchant (UMKM Seller)</option>
-              <option value="COACH">Instruktur Olahraga (Coach)</option>
-            </select>
-          </div>
-          {errors.role && <p className="text-red-400 text-xs mt-1">{errors.role.message}</p>}
-        </div>
-
-        <button type="submit" disabled={isSubmitting} className="w-full py-4 bg-brand-emerald text-black font-mono text-xs font-black tracking-wider rounded-lg hover:bg-emerald-400 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-md">
-          {isSubmitting ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>MENGAMANKAN DATA...</span>
-            </>
-          ) : (
-            <span>DAFTARKAN AKUN</span>
-          )}
-        </button>
-      </form>
-
-      <p className="text-center text-sm text-zinc-500">
-        Sudah memiliki Akun?{" "}
-        <Link href="/login" className="text-brand-emerald font-bold hover:text-emerald-400 transition-colors">
-          Masuk di sini.
-        </Link>
-      </p>
-    </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor="email">Email</label>
+        <input id="email" name="email" type="email" required className="border p-2 rounded" />
+      </div>
+      
+      <div className="flex flex-col gap-1">
+        <label htmlFor="password">Password</label>
+        <input id="password" name="password" type="password" required minLength={6} className="border p-2 rounded" />
+      </div>
+      
+      <button 
+        type="submit" 
+        disabled={isLoading}
+        className="bg-green-600 text-white p-2 rounded disabled:opacity-50"
+      >
+        {isLoading ? 'Creating Account...' : 'Register'}
+      </button>
+    </form>
   );
 }
