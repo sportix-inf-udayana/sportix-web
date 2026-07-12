@@ -2,46 +2,43 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import BarcodeScannerComponent from "react-qr-barcode-scanner";
-import { createBrowserClient } from "@supabase/ssr";
 import { CheckCircle2, AlertTriangle, Loader2, RefreshCcw, Camera } from "lucide-react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 const cn = (...inputs) => twMerge(clsx(inputs));
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
-
-export default function ScannerClient() {
+// TERIMA accessToken SEBAGAI PROP
+export default function ScannerClient({ accessToken }) {
   const [isMounted, setIsMounted] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState("IDLE");
   const lastScannedRef = useRef(null);
 
-  // Mencegah eksekusi kamera di sisi server (SSR) yang menyebabkan 'window is not defined'
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   const handleProcessBarcode = async (token) => {
     if (lastScannedRef.current === token || isScanning) return;
+    if (!accessToken) {
+      setScanStatus("ERROR");
+      setScanResult({ message: "Token akses tidak tersedia. Muat ulang halaman." });
+      return;
+    }
     
     lastScannedRef.current = token;
     setIsScanning(true);
     setScanStatus("IDLE");
     
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Sesi Otorisasi Berakhir.");
-
+      // API call langsung tanpa perlu auth.getSession() lagi
       const response = await fetch("/api/scan", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`
+          "Authorization": `Bearer ${accessToken}`
         },
         body: JSON.stringify({ barcodeToken: token })
       });

@@ -9,7 +9,10 @@ import * as z from "zod";
 import Image from "next/image";
 import { Loader2, CheckCircle2, Store, ImageOff } from "lucide-react";
 
-const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL, 
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 const onboardingSchema = z.object({
   name: z.string().min(3, "Nama toko minimal 3 karakter"),
@@ -17,7 +20,8 @@ const onboardingSchema = z.object({
   image_url: z.string().url("Format URL gambar tidak valid").optional().or(z.literal('')),
 });
 
-export default function OnboardingClient() {
+// TERIMA userId SEBAGAI PROP, JANGAN FETCH DI CLIENT
+export default function OnboardingClient({ userId }) {
   const router = useRouter();
   const [authError, setAuthError] = useState(null);
   const [imageError, setImageError] = useState(false);
@@ -32,9 +36,10 @@ export default function OnboardingClient() {
   const onSubmit = async (data) => {
     setAuthError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      if (!userId) throw new Error("Sesi pengguna tidak terdeteksi. Silakan muat ulang halaman.");
+
       const payload = { 
-        owner_id: user.id, 
+        owner_id: userId, // Gunakan prop langsung
         name: data.name, 
         address: data.address, 
         image_url: data.image_url && !imageError ? data.image_url : null,

@@ -1,37 +1,65 @@
 export async function getAvailableSlots(supabase, venueId, dateStr) {
   try {
-    const { data: fieldData, error: fieldError } = await supabase
+    // 1. Eksekusi Relational Query (INNER JOIN)
+    // Mengambil SEMUA lapangan milik venue, beserta slotnya di tanggal tersebut
+    const { data: fields, error } = await supabase
       .from('fields')
-      .select('id, name, price_per_hour')
+      .select(`
+        id, 
+        name, 
+        price_per_hour,
+        slots (
+          id, 
+          slot_date, 
+          start_time, 
+          end_time, 
+          status, 
+          locked_until
+        )
+      `)
       .eq('venue_id', venueId)
-      .limit(1)
-      .single();
+      .eq('slots.slot_date', dateStr)
+      .neq('slots.status', 'BOOKED'); // Filter level 1: Buang yang sudah pasti terbeli
 
-    if (fieldError || !fieldData) {
-      throw new Error("Arena ini belum mendaftarkan entitas lapangan yang valid.");
+    if (error) throw error;
+    if (!fields || fields.length === 0) {
+      throw new Error("Venue ini belum memiliki lapangan atau slot aktif.");
     }
 
-    const { data: slotData, error: slotError } = await supabase
-      .from('slots')
-      .select('id, field_id, slot_date, start_time, end_time, status, locked_until')
-      .eq('field_id', fieldData.id)
-      .eq('slot_date', dateStr)
-      .order('start_time', { ascending: true });
+    const availableSlots = [];
+    const currentTime = new Date().getTime();
 
-    if (slotError) throw slotError;
-    
-    const slots = (slotData || []).map(s => ({
-      ...s,
-      price: fieldData.price_per_hour,
-      fieldName: fieldData.name
-    }));
+    // 2. Filter level 2: Conflict Detection & Data Normalization
+    fields.forEach(field => {
+      // Pastikan slots ada, karena LEFT JOIN bisa mengembalikan array kosong
+      const slots = field.slots || []; 
+      
+      slots.forEach(slot => {
+        // RACE CONDITION DEFENSE: 
+        // Jika slot sedang di-lock oleh user lain yang sedang di halaman pembayaran, abaikan.
+        if (slot.locked_until) {
+          const lockTime = new Date(slot.locked_until).getTime();
+          if (lockTime > currentTime) return; // Slot masih terkunci, skip.
+        }
 
-    return { slots, error: null };
+        availableSlots.push({
+          ...slot,
+          price: field.price_per_hour,
+          fieldName: field.name,
+          fieldId: field.id
+        });
+      });
+    });
+
+    // 3. Sorting berdasarkan waktu mulai
+    availableSlots.sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+    return { slots: availableSlots, error: null };
   } catch (error) {
-    console.error("Sinkronisasi Jadwal Gagal:", error);
+    console.error("[VenueService] Sinkronisasi Jadwal Gagal:", error.message);
     return { 
       slots: [], 
-      error: error.message || "Gagal memuat jadwal matriks ketersediaan." 
+      error: error.isOperational ? error.message : "Gagal memuat jadwal matriks ketersediaan." 
     };
   }
 }

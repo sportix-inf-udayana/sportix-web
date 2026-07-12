@@ -8,6 +8,9 @@ const checkEnv = (url, key, type) => {
   if (!url || !key) throw new Error(`CRITICAL: Konfigurasi Supabase ${type} tidak ditemukan.`);
 };
 
+// Pola Singleton untuk Admin Client guna mencegah Connection Exhaustion
+let supabaseAdminInstance = null;
+
 export function getSupabase() {
   checkEnv(URL, ANON_KEY, "URL/ANON_KEY");
   return createClient(URL, ANON_KEY, {
@@ -16,10 +19,14 @@ export function getSupabase() {
 }
 
 export function getSupabaseAdmin() {
+  if (supabaseAdminInstance) return supabaseAdminInstance;
+  
   checkEnv(URL, SERVICE_KEY, "Service Role Key");
-  return createClient(URL, SERVICE_KEY, {
+  supabaseAdminInstance = createClient(URL, SERVICE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  
+  return supabaseAdminInstance;
 }
 
 export function getSupabaseUser(token) {
