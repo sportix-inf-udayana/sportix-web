@@ -1,20 +1,49 @@
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-import { redirect } from "next/navigation";
-import PendingUI from "../../../../components/shared/PendingUI";
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import PendingUI from '@/components/shared/PendingUI';
 
-export const dynamic = 'force-dynamic';
+export const metadata = {
+  title: 'Application Pending - Sportix',
+};
 
-export default async function AdminVenuePendingPage() {
+export default async function VenuePendingPage() {
   const cookieStore = cookies();
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { cookies: { getAll: () => cookieStore.getAll() } });
-  
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    { cookies: { getAll() { return cookieStore.getAll() } } }
+  );
+
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user || user.user_metadata?.role !== 'ADMIN_VENUE') redirect("/login");
+  
+  if (!user) {
+    redirect('/login');
+  }
 
-  const { data: venue } = await supabase.from("venues").select("status").eq("owner_id", user.id).maybeSingle();
-  if (!venue) redirect("/admin-venue/onboarding");
-  if (venue.status === 'APPROVED') redirect("/admin-venue/slots");
+  // GUARD LOGIC: Pastikan user benar-benar berhak melihat halaman pending ini.
+  const { data: venue } = await supabase
+    .from('venues')
+    .select('status, is_active')
+    .eq('owner_id', user.id)
+    .single();
 
-  return <PendingUI title="Berkas Sedang Ditinjau" description="Manifes kelayakan fisik properti arena olahraga Anda sedang divalidasi oleh Tim Super Admin Universitas Udayana. Proses maksimal 1x24 jam." />;
+  // Jika tidak punya venue, paksa kembali ke form
+  if (!venue) {
+    redirect('/admin-venue/onboarding');
+  }
+
+  // Jika sudah disetujui, paksa masuk ke dashboard
+  if (venue.status === 'approved' || venue.is_active) {
+    redirect('/admin-venue');
+  }
+
+  return (
+    <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <PendingUI 
+        title="Venue Application Pending"
+        message="Thank you for registering your venue. Our team is verifying your details. You will gain access to the dashboard once approved."
+      />
+    </main>
+  );
 }

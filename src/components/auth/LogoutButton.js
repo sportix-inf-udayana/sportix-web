@@ -1,23 +1,25 @@
-"use client";
+'use client';
 
-import { createBrowserClient } from "@supabase/ssr";
-import { LogOut } from "lucide-react";
+import { useTransition } from 'react';
+import { logoutAction } from '@/app/(auth)/_actions';
 
 export default function LogoutButton() {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const [isPending, startTransition] = useTransition();
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/";
+  const handleLogout = () => {
+    startTransition(() => {
+      logoutAction();
+    });
   };
 
   return (
-    <button onClick={handleLogout} className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 py-2.5 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-all">
-      <LogOut className="w-3.5 h-3.5" />
-      <span>KELUAR PORTAL SECURELY</span>
+    <button 
+      onClick={handleLogout}
+      disabled={isPending}
+      className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50 transition-colors"
+      aria-label="Logout"
+    >
+      {isPending ? 'Logging out...' : 'Logout'}
     </button>
   );
 }
