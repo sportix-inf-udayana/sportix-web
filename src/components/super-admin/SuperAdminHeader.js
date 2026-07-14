@@ -3,28 +3,26 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
 import { Shield, TrendingUp, Sliders, LogOut, User } from "lucide-react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { getSupabase } from "@/lib/supabase";
 
 const cn = (...inputs) => twMerge(clsx(inputs));
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
 
 export default function SuperAdminHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState(null);
+  const supabase = getSupabase();
 
   useEffect(() => {
+    let isMounted = true;
     supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) setCurrentUser(data.user);
+      if (isMounted && data?.user) setCurrentUser(data.user);
     });
-  }, []);
+    return () => { isMounted = false; };
+  }, [supabase]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

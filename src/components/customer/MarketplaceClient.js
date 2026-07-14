@@ -18,7 +18,7 @@ export default function MarketplaceClient({ initialVenues }) {
 
   const filteredVenues = (initialVenues || []).filter((venue) => {
     const matchesSearch = venue.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          venue.location.toLowerCase().includes(searchQuery.toLowerCase());
+                          (venue.address || venue.location || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesSport = selectedSport === "All" || venue.sport === selectedSport;
     return matchesSearch && matchesSport;
   });
@@ -38,7 +38,6 @@ export default function MarketplaceClient({ initialVenues }) {
             className="w-full bg-zinc-900 border border-zinc-800 focus:border-brand-emerald rounded-xl py-3 pl-10 pr-4 text-sm text-white placeholder-zinc-500 outline-none transition-all duration-200 font-sans"
           />
         </div>
-
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-mono font-bold text-zinc-500 mr-2 uppercase flex items-center gap-1">
             <Filter className="w-3.5 h-3.5" /> Filter
@@ -79,7 +78,7 @@ export default function MarketplaceClient({ initialVenues }) {
               >
                 <div className="relative h-48 overflow-hidden bg-zinc-950">
                   <Image
-                    src={venue.image}
+                    src={venue.images?.[0] || venue.image || "/image/hero-arena.jpg"}
                     alt={venue.name}
                     fill
                     sizes="(max-width: 768px) 100vw, 25vw"
@@ -87,28 +86,26 @@ export default function MarketplaceClient({ initialVenues }) {
                   />
                   <div className="absolute top-3 right-3 bg-zinc-950/80 backdrop-blur-md text-white text-[10px] font-mono px-2 py-1 rounded flex items-center gap-1 border border-zinc-800">
                     <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                    <span>{venue.rating}</span>
+                    <span>{venue.rating || "5.0"}</span>
                   </div>
                 </div>
-
                 <div className="p-5 flex-1 flex flex-col justify-between">
                   <div>
                     <span className="text-[10px] font-mono font-bold text-brand-emerald tracking-widest uppercase block mb-2">
-                      {venue.sport}
+                      {venue.sport || "SPORT VENUE"}
                     </span>
                     <h4 className="text-base font-bold text-white mb-1.5 line-clamp-1 group-hover:text-brand-emerald transition-colors font-display">
                       {venue.name}
                     </h4>
                     <div className="flex items-center gap-1.5 text-xs text-zinc-400 mb-4">
                       <MapPin className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
-                      <span className="truncate">{venue.location}</span>
+                      <span className="truncate">{venue.address || venue.location}</span>
                     </div>
                   </div>
-
                   <div className="pt-4 border-t border-zinc-800/60 flex items-center justify-between mt-2">
                     <div>
                       <span className="text-[10px] font-mono text-zinc-500 block leading-none">START FROM</span>
-                      <span className="text-xs font-mono font-bold text-white mt-1 block">{venue.price}</span>
+                      <span className="text-xs font-mono font-bold text-white mt-1 block">Rp {Number(venue.price_per_hour || venue.price || 0).toLocaleString('id-ID')}</span>
                     </div>
                     <div className="w-8 h-8 rounded-lg bg-zinc-950 border border-zinc-800 group-hover:bg-brand-emerald group-hover:border-brand-emerald group-hover:text-black transition-all flex items-center justify-center text-zinc-500">
                       <Calendar className="w-4 h-4" />

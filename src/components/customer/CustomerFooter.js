@@ -8,7 +8,6 @@ export default function CustomerFooter() {
     <footer className="w-full bg-zinc-950 border-t border-zinc-900 pt-16 pb-8 mt-auto font-sans">
       <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
         
-        {/* Brand & Visi */}
         <div className="col-span-1 md:col-span-2">
           <Link href="/" className="font-display font-black text-2xl tracking-tighter text-white inline-block mb-4 hover:opacity-90 transition-opacity">
             SPORTIX<span className="text-brand-emerald">.</span>
@@ -18,7 +17,6 @@ export default function CustomerFooter() {
           </p>
         </div>
 
-        {/* Navigasi Cepat */}
         <div>
           <h4 className="text-white font-bold mb-5 tracking-wide uppercase text-xs font-mono">Eksplorasi</h4>
           <ul className="space-y-3 text-sm text-zinc-400 font-medium">
@@ -28,7 +26,6 @@ export default function CustomerFooter() {
           </ul>
         </div>
 
-        {/* Legalitas & Bantuan */}
         <div>
           <h4 className="text-white font-bold mb-5 tracking-wide uppercase text-xs font-mono">Dukungan</h4>
           <ul className="space-y-3 text-sm text-zinc-400 font-medium">
@@ -37,6 +34,7 @@ export default function CustomerFooter() {
             <li><Link href="/privacy" className="hover:text-brand-emerald transition-colors">Kebijakan Privasi</Link></li>
           </ul>
         </div>
+
       </div>
 
       <div className="max-w-7xl mx-auto px-6 pt-8 border-t border-zinc-900 flex flex-col md:flex-row items-center justify-between gap-4">

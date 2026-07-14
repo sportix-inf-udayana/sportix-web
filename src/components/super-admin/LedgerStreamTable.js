@@ -11,14 +11,13 @@ export default function LedgerStreamTable({ streamData }) {
       <h3 className="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-6 flex items-center gap-1.5">
         <RefreshCw className="w-4 h-4 text-brand-emerald" /> IMMUTABLE LEDGER STREAM
       </h3>
-
       {streamData && streamData.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs font-mono">
             <thead>
               <tr className="border-b border-zinc-800 text-zinc-500 uppercase pb-3">
                 <th className="pb-3 font-semibold">TX UUID</th>
-                <th className="pb-3 font-semibold">Waktu (UTC)</th>
+                <th className="pb-3 font-semibold">Waktu (WITA)</th>
                 <th className="pb-3 font-semibold">Sumber Transaksi</th>
                 <th className="pb-3 font-semibold text-right">Nominal</th>
                 <th className="pb-3 font-semibold text-right">Tipe Mutasi</th>
@@ -31,7 +30,7 @@ export default function LedgerStreamTable({ streamData }) {
                     {tx.id.substring(0, 8)}...
                   </td>
                   <td className="py-4 text-zinc-400">
-                    {new Date(tx.created_at).toLocaleString('id-ID')}
+                    {new Date(tx.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Makassar' })}
                   </td>
                   <td className="py-4">
                     <span className="bg-zinc-950 border border-zinc-800 px-2 py-0.5 rounded text-zinc-300">

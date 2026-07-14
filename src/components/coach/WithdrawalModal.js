@@ -1,144 +1,184 @@
 "use client";
 
 import React, { useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
-import { X, Loader2, AlertCircle, Wallet } from "lucide-react";
+import { X, Loader2, CheckCircle2, AlertCircle, Building2, CreditCard, DollarSign } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { useRouter } from "next/navigation";
+import { getSupabase } from "@/lib/supabase";
 
-// Inisiasi Supabase diletakkan di luar komponen untuk mencegah memory leak
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+export default function WithdrawalModal({ isOpen, onClose, availableBalance }) {
+  const router = useRouter();
+  const [submitError, setSubmitError] = useState(null);
+  const [success, setSuccess] = useState(false);
+  const supabase = getSupabase();
 
-export default function WithdrawalModal({ isOpen, onClose, availableBalance, onActionSuccess }) {
-  const [amount, setAmount] = useState("");
-  const [bankName, setBankName] = useState("Bank BPD Bali");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState(null);
+  const withdrawalSchema = z.object({
+    amount: z.coerce
+      .number({ invalid_type_error: "Masukkan nominal yang valid" })
+      .min(50000, "Minimal penarikan Rp 50.000")
+      .max(availableBalance, "Melebihi saldo tersedia"),
+    bank_name: z.string().min(2, "Bank tujuan wajib diisi"),
+    account_number: z.string().min(5, "Nomor rekening tidak valid"),
+  });
+
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm({
+    resolver: zodResolver(withdrawalSchema),
+    defaultValues: { amount: "", bank_name: "BCA", account_number: "" }
+  });
 
   if (!isOpen) return null;
 
-  const handleSubmitWithdrawal = async (e) => {
-    e.preventDefault();
-    setErrorMsg(null);
+  const handleClose = () => {
+    if (isSubmitting) return;
+    reset();
+    setSubmitError(null);
+    setSuccess(false);
+    onClose();
+  };
 
-    const parsedAmount = Number(amount);
-    if (parsedAmount > availableBalance) {
-      setErrorMsg("Nominal penarikan melebihi sisa saldo tersedia akun Anda.");
-      return;
-    }
-
-    setLoading(true);
-
+  const onSubmit = async (data) => {
+    setSubmitError(null);
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        throw new Error("Sesi masuk habis. Silakan refresh browser Anda.");
-      }
+      if (sessionError || !session) throw new Error("Akses ditolak. Silakan login kembali.");
 
-      const response = await fetch("/api/withdrawals/request", {
+      const response = await fetch("/api/coach/withdraw", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({
-          amount: parsedAmount,
-          bankName: bankName,
-          accountNumber: accountNumber.trim()
-        })
+        body: JSON.stringify(data)
       });
 
       const result = await response.json();
+      if (!response.ok) throw new Error(result.error || result.message || "Gagal memproses penarikan.");
 
-      if (!response.ok) {
-        throw new Error(result.message || "Gagal memproses pengajuan pencairan kas.");
-      }
-
-      alert(result.message || "Pengajuan dana dicatat sukses.");
-      if (onActionSuccess) onActionSuccess();
-      onClose();
-
+      setSuccess(true);
+      setTimeout(() => {
+        handleClose();
+        router.refresh();
+      }, 2000);
     } catch (err) {
-      console.error(err);
-      setErrorMsg(err.message);
-    } finally {
-      setLoading(false);
+      setSubmitError(err.message);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 font-sans">
-      <div className="bg-zinc-950 border border-zinc-800 w-full max-w-sm rounded-2xl p-6 relative text-white shadow-2xl animate-in zoom-in-95 duration-200">
-        <button onClick={onClose} className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors cursor-pointer bg-zinc-900 border border-zinc-800 p-1.5 rounded-full">
-          <X className="w-4 h-4" />
-        </button>
-
-        <div className="flex items-center gap-3 mb-6 border-b border-zinc-800 pb-4">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-brand-emerald">
-            <Wallet className="w-4 h-4" />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col relative slide-in-from-bottom-4">
+        
+        <div className="flex items-center justify-between p-6 border-b border-zinc-800 bg-zinc-900/50">
+          <div>
+            <h3 className="text-lg font-black text-white font-display uppercase tracking-wide">Tarik Saldo</h3>
+            <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mt-1">WITHDRAWAL REQUEST</p>
           </div>
-          <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-300">Pencairan Saldo Kas</h3>
+          <button 
+            onClick={handleClose}
+            disabled={isSubmitting}
+            className="text-zinc-500 hover:text-white bg-zinc-900 hover:bg-zinc-800 p-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
-        {errorMsg && (
-          <div className="mb-6 p-3 bg-red-950/20 border border-red-500/20 rounded-xl text-[10px] font-mono tracking-widest uppercase text-red-400 flex items-start gap-2 shadow-sm">
-            <AlertCircle className="w-4 h-4 shrink-0 -mt-0.5" />
-            <span>{errorMsg}</span>
-          </div>
-        )}
+        <div className="p-6">
+          {success ? (
+            <div className="py-12 flex flex-col items-center justify-center text-center">
+              <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4">
+                <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+              </div>
+              <h4 className="text-lg font-bold text-white mb-2">Permintaan Diproses</h4>
+              <p className="text-xs text-zinc-400 font-mono">Dana akan masuk ke rekening Anda dalam 1x24 jam kerja.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+              {submitError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-2 text-red-400 font-mono text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{submitError}</span>
+                </div>
+              )}
 
-        <form onSubmit={handleSubmitWithdrawal} className="space-y-5">
-          <div className="space-y-2">
-            <label className="text-[10px] font-mono text-zinc-500 font-bold uppercase tracking-widest block">Nominal Penarikan (IDR)</label>
-            <input
-              type="number"
-              required
-              min={50000}
-              disabled={loading}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="Min. Rp 50,000"
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 font-mono text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors"
-            />
-          </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest block">Nominal Penarikan</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
+                  <input 
+                    disabled={isSubmitting} 
+                    type="number" 
+                    placeholder="50000" 
+                    {...register("amount")} 
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white focus:border-brand-emerald focus:outline-none transition-colors disabled:opacity-50 font-mono text-sm" 
+                  />
+                </div>
+                {errors.amount && <p className="text-red-400 text-[10px] font-mono mt-1 uppercase">{errors.amount.message}</p>}
+              </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-mono text-zinc-500 font-bold uppercase tracking-widest block">Bank Tujuan</label>
-            <select
-              value={bankName}
-              onChange={(e) => setBankName(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors appearance-none font-sans cursor-pointer"
-            >
-              <option value="Bank BPD Bali">Bank BPD Bali</option>
-              <option value="Bank Mandiri">Bank Mandiri</option>
-              <option value="Bank BCA">Bank BCA</option>
-              <option value="Bank BRI">Bank BRI</option>
-            </select>
-          </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest block">Bank Tujuan</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <select 
+                    disabled={isSubmitting} 
+                    {...register("bank_name")} 
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white focus:border-brand-emerald focus:outline-none transition-colors disabled:opacity-50 font-mono text-sm appearance-none"
+                  >
+                    <option value="BCA">BCA (Bank Central Asia)</option>
+                    <option value="MANDIRI">Bank Mandiri</option>
+                    <option value="BNI">BNI (Bank Negara Indonesia)</option>
+                    <option value="BRI">BRI (Bank Rakyat Indonesia)</option>
+                    <option value="GOPAY">GoPay</option>
+                    <option value="DANA">DANA</option>
+                    <option value="OVO">OVO</option>
+                  </select>
+                </div>
+                {errors.bank_name && <p className="text-red-400 text-[10px] font-mono mt-1 uppercase">{errors.bank_name.message}</p>}
+              </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-mono text-zinc-500 font-bold uppercase tracking-widest block">Nomor Rekening</label>
-            <input
-              type="text"
-              required
-              disabled={loading}
-              value={accountNumber}
-              onChange={(e) => setAccountNumber(e.target.value)}
-              placeholder="Masukkan nomor rekening aktif"
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 font-mono text-sm text-white focus:outline-none focus:border-brand-emerald transition-colors"
-            />
-          </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest block">Nomor Rekening / E-Wallet</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <input 
+                    disabled={isSubmitting} 
+                    type="text" 
+                    placeholder="Masukkan no. rekening" 
+                    {...register("account_number")} 
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white focus:border-brand-emerald focus:outline-none transition-colors disabled:opacity-50 font-mono text-sm" 
+                  />
+                </div>
+                {errors.account_number && <p className="text-red-400 text-[10px] font-mono mt-1 uppercase">{errors.account_number.message}</p>}
+              </div>
 
-          <button
-            type="submit"
-            disabled={loading || !amount || !accountNumber.trim()}
-            className="w-full bg-brand-emerald hover:bg-emerald-400 disabled:bg-zinc-800 text-black disabled:text-zinc-600 font-mono text-xs font-black tracking-widest uppercase py-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-[0_0_20px_rgba(16,185,129,0.15)] disabled:shadow-none mt-2"
-          >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>AJUKAN PENCAIRAN</span>}
-          </button>
-        </form>
+              <div className="pt-4 border-t border-zinc-800/60 flex items-center justify-between gap-4">
+                <button 
+                  type="button" 
+                  onClick={handleClose} 
+                  disabled={isSubmitting}
+                  className="flex-1 py-3.5 bg-zinc-900 hover:bg-zinc-800 text-white border border-zinc-800 rounded-xl font-bold font-mono text-xs transition-all disabled:opacity-50 tracking-widest uppercase cursor-pointer"
+                >
+                  BATAL
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting} 
+                  className="flex-1 py-3.5 bg-brand-emerald hover:bg-emerald-400 text-black rounded-xl font-black font-mono text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:shadow-none tracking-widest uppercase cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "PROSES"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -33,37 +33,55 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
   };
 
   const removeFromCart = (id) => setCart(cart.filter(item => item.id !== id));
+
   const displayTotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     setIsCheckingOut(true);
-
+    
     try {
       const checkoutPayload = cart.map(item => ({ productId: item.id, quantity: item.qty }));
-
+      
       const response = await fetch("/api/umkm/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: checkoutPayload })
       });
       
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.message || "Gagal menginisialisasi pembayaran.");
+      const resData = await response.json();
+      if (!response.ok || !resData.success) {
+        throw new Error(resData.error?.message || resData.message || "Gagal menginisialisasi pembayaran.");
+      }
+      
+      const snapToken = resData.data?.snapToken || resData.snapToken;
 
       if (window.snap) {
-         window.snap.pay(data.snapToken, {
-            onSuccess: () => { setCart([]); setIsCartOpen(false); router.push('/profile/history'); },
-            onPending: () => { alert("Menunggu pembayaran Anda."); setIsCartOpen(false); },
-            onError: () => alert("Pembayaran gagal. Silakan coba lagi."),
-            onClose: () => alert("Anda menutup jendela pembayaran. Transaksi dibatalkan.")
-         });
+        window.snap.pay(snapToken, {
+          onSuccess: () => { 
+            setCart([]); 
+            setIsCartOpen(false); 
+            router.push('/profile/history'); 
+          },
+          onPending: () => { 
+            alert("Menunggu pembayaran Anda."); 
+            setIsCartOpen(false); 
+            router.push('/profile/history');
+          },
+          onError: () => {
+            alert("Pembayaran gagal. Silakan coba lagi.");
+            setIsCheckingOut(false);
+          },
+          onClose: () => {
+            alert("Anda menutup jendela pembayaran. Transaksi dibatalkan.");
+            setIsCheckingOut(false);
+          }
+        });
       } else {
-         throw new Error("Midtrans Snap.js tidak termuat di browser.");
+        throw new Error("Midtrans Snap.js tidak termuat di browser.");
       }
     } catch (error) {
       alert(error.message || "Terjadi kesalahan jaringan atau parameter manipulasi terdeteksi.");
-    } finally {
       setIsCheckingOut(false);
     }
   };
@@ -81,7 +99,6 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
             className="w-full bg-zinc-900 border border-zinc-800 focus:border-brand-emerald rounded-xl py-3 pl-10 pr-4 text-sm text-white placeholder-zinc-500 outline-none transition-all"
           />
         </div>
-
         <button
           onClick={() => setIsCartOpen(!isCartOpen)}
           className="w-full md:w-auto bg-zinc-900 border border-zinc-800 hover:border-brand-emerald hover:text-white p-3 rounded-xl flex items-center justify-center gap-2 text-xs font-mono font-bold tracking-widest text-zinc-400 transition-colors shadow-sm"
@@ -101,7 +118,7 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
             <div key={p.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col justify-between group hover:border-brand-emerald/50 transition-colors shadow-xl">
               <div className="h-48 bg-zinc-950 overflow-hidden relative">
                 <Image
-                  src={p.image || "/image/hero-arena.jpg"}
+                  src={p.image_url || p.image || "/image/hero-arena.jpg"}
                   alt={p.name}
                   fill
                   sizes="(max-width: 768px) 100vw, 25vw"
@@ -114,7 +131,7 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
               <div className="p-5 flex-1 flex flex-col justify-between">
                 <div>
                   <h4 className="text-base font-bold text-white group-hover:text-brand-emerald transition-colors font-display line-clamp-1">{p.name}</h4>
-                  <p className="text-xs text-zinc-500 leading-relaxed mt-2 mb-4 font-sans line-clamp-2">{p.desc}</p>
+                  <p className="text-xs text-zinc-500 leading-relaxed mt-2 mb-4 font-sans line-clamp-2">{p.description || p.desc}</p>
                 </div>
                 <div>
                   <div className="flex justify-between items-center border-t border-zinc-800/60 pt-4 mt-auto">
@@ -150,7 +167,7 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
               <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-brand-emerald" /> Consignment Cart
               </h3>
-
+              
               {cart.length === 0 ? (
                 <div className="text-center py-12 text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl uppercase tracking-widest">
                   Keranjang Anda Kosong
@@ -180,16 +197,18 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
                 </div>
               )}
             </div>
-
+            
             {cart.length > 0 && (
               <div className="border-t border-zinc-800 pt-6 mt-4 space-y-5 bg-zinc-950">
                 <div className="flex justify-between items-center font-mono">
                   <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">ESTIMASI SUBTOTAL</span>
                   <span className="text-brand-emerald font-bold text-lg">Rp {displayTotal.toLocaleString("id-ID")}</span>
                 </div>
+                
                 <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl text-[10px] font-mono font-bold tracking-widest text-brand-emerald flex items-center justify-center gap-2 uppercase">
                   <ShieldCheck className="w-4 h-4" /> 100% SECURE CASHLESS
                 </div>
+
                 <button
                   onClick={handleCheckout}
                   disabled={isCheckingOut}

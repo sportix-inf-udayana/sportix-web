@@ -2,44 +2,45 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { createBrowserClient } from "@supabase/ssr";
 import { Plus, Package, Edit, Trash2, Loader2, AlertCircle } from "lucide-react";
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+import { getSupabase } from "@/lib/supabase";
 
 export default function ProductCatalogClient() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const supabase = getSupabase();
 
   useEffect(() => {
+    let isMounted = true;
+
+    const fetchProducts = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Akses ditolak.");
+
+        const { data: store } = await supabase.from("umkm_stores").select("id").eq("owner_id", user.id).single();
+        if (!store) throw new Error("Data toko tidak ditemukan.");
+
+        const { data, error } = await supabase
+          .from("umkm_products")
+          .select("*")
+          .eq("store_id", store.id)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        if (isMounted) setProducts(data || []);
+      } catch (err) {
+        if (isMounted) setError(err.message);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
     fetchProducts();
-  }, []);
 
-  const fetchProducts = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: store } = await supabase.from("umkm_stores").select("id").eq("owner_id", user.id).single();
-      
-      if (!store) throw new Error("Data toko tidak ditemukan.");
-
-      const { data, error } = await supabase
-        .from("umkm_products")
-        .select("*")
-        .eq("store_id", store.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setProducts(data || []);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => { isMounted = false; };
+  }, [supabase]);
 
   return (
     <div className="space-y-6 w-full text-white font-sans">
@@ -53,14 +54,12 @@ export default function ProductCatalogClient() {
           <span>TAMBAH PRODUK (SEGERA)</span>
         </button>
       </div>
-
       {error && (
         <div className="flex items-start gap-2.5 p-3.5 rounded-lg bg-red-950/20 border border-red-500/20 text-red-400 text-xs font-mono">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
       )}
-
       {loading ? (
         <div className="h-40 flex flex-col items-center justify-center gap-3 border border-zinc-800 border-dashed rounded-xl text-purple-500">
            <Loader2 className="w-6 h-6 animate-spin" />
