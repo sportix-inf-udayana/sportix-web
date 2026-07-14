@@ -1,107 +1,118 @@
-export async function getVenueList(supabase) {
-  try {
-    const { data: venues, error } = await supabase
-      .from("venues")
-      .select("id, name, address, description, rating, fields(price_per_hour, sport_type)")
-      .eq("status", "APPROVED")
-      .order("created_at", { ascending: false });
+import { supabase } from '@/lib/supabase'; // Asumsi klien standar atau SSR terintegrasi
 
-    if (error) throw error;
+export async function getVenueById(venueId) {
+  if (!venueId) return null;
 
-    const formattedVenues = (venues || []).map(v => {
-      const prices = v.fields?.map(f => Number(f.price_per_hour)) || [];
-      const minPrice = prices.length ? Math.min(...prices) : 0;
-      
-      const allSports = v.fields?.map(f => f.sport_type).filter(Boolean) || [];
-      const sports = allSports.filter((item, index) => allSports.indexOf(item) === index);
-
-      return {
-        id: v.id,
-        name: v.name,
-        location: v.address || "Lokasi tidak diketahui",
-        description: v.description,
-        image: "/image/hero-arena.jpg",
-        rating: v.rating || 5.0,
-        price: minPrice ? `Rp ${minPrice.toLocaleString('id-ID')}/Jam` : "N/A",
-        sport: sports.length > 0 ? sports[0] : "Umum",
-      };
-    });
-
-    return { venues: formattedVenues, error: null };
-  } catch (error) {
-    console.error("Fetch Venue List Error:", error);
-    return { venues: [], error };
-  }
-}
-
-export async function getVenueDetail(supabase, venueId) {
   try {
     const { data, error } = await supabase
-      .from("venues")
-      .select("*")
-      .eq("id", venueId)
+      .from('venues')
+      .select('id, name, description, price_per_hour, images, address, is_active')
+      .eq('id', venueId)
       .single();
 
-    if (error) throw error;
-    return { data, error: null };
-  } catch (error) {
-    console.error(`Fetch Venue Detail Error (${venueId}):`, error);
-    return { data: null, error };
+    if (error) {
+      console.error(`[Service Error] getVenueById: ${error.message}`);
+      return null;
+    }
+
+    // Sanitasi data yang tidak aktif
+    if (!data?.is_active) return null;
+
+    return data;
+  } catch (err) {
+    console.error(`[Service Exception] getVenueById:`, err);
+    return null;
   }
 }
 
-export async function getUmkmCatalog(supabase) {
+export async function getCustomerHistory(supabaseServerClient, userId) {
+  if (!userId) return [];
+
   try {
-    const { data: products, error } = await supabase
-      .from("umkm_products")
+    const { data, error } = await supabaseServerClient
+      .from('bookings')
       .select(`
-        id, name, price, stock, description, image_url,
-        umkm_stores!inner ( status )
+        id,
+        booking_date,
+        total_price,
+        status,
+        venues ( name, address ),
+        slots ( start_time, end_time )
       `)
-      .eq("umkm_stores.status", "APPROVED")
-      .gt("stock", 0)
-      .order("created_at", { ascending: false });
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[Service Error] getCustomerHistory:', error.message);
+      return [];
+    }
 
-    return { 
-      products: (products || []).map(p => ({
-        id: p.id,
-        name: p.name,
-        price: p.price,
-        stock: p.stock,
-        desc: p.description || "Perlengkapan olahraga lokal.",
-        image: p.image_url || "/image/hero-arena.jpg"
-      })), 
-      error: null 
-    };
-  } catch (error) {
-    console.error("UMKM Catalog Fetch Error:", error);
-    return { products: [], error };
+    return data || [];
+  } catch (err) {
+    console.error('[Service Exception] getCustomerHistory:', err);
+    return [];
   }
 }
 
-export async function getUserTicketHistory(supabase, userId) {
+export async function getUmkmProducts(supabaseServerClient) {
   try {
-    const { data: tickets, error } = await supabase
-      .from("reservations")
-      .select(`
-        id, status, barcode_token, booking_date, start_time, total_amount,
-        slots ( price, venues ( name ) )
-      `)
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+    const { data, error } = await supabaseServerClient
+      .from('umkm_products') // Sesuaikan dengan nama tabel aslimu
+      .select('id, name, description, price, image_url, stock, umkm_name')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    const safeTickets = tickets || [];
-    
-    return { 
-      tickets: safeTickets,
-      activeTickets: safeTickets.filter(t => t.status === "CONFIRMED"), 
-      error: null 
-    };
-  } catch (error) {
-    console.error("Fetch User Tickets Error:", error);
-    return { tickets: [], activeTickets: [], error };
+    if (error) {
+      console.error('[Service Error] getUmkmProducts:', error.message);
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('[Service Exception] getUmkmProducts:', err);
+    return [];
+  }
+}
+
+export async function getTournaments(supabaseServerClient) {
+  try {
+    const { data, error } = await supabaseServerClient
+      .from('tournaments') // Sesuaikan dengan nama tabel aslimu
+      .select('id, title, description, start_date, end_date, registration_fee, status, banner_url')
+      .order('start_date', { ascending: true });
+
+    if (error) {
+      console.error('[Service Error] getTournaments:', error.message);
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('[Service Exception] getTournaments:', err);
+    return [];
+  }
+}
+
+export async function getFeaturedVenues(supabaseServerClient) {
+  try {
+    // Asumsi: Kita mengambil 4 venue terbaru yang aktif. 
+    // Jika di databasemu ada kolom 'is_featured' atau 'rating', ubah query ini agar lebih relevan.
+    const { data, error } = await supabaseServerClient
+      .from('venues')
+      .select('id, name, address, price_per_hour, images, is_active')
+      .eq('is_active', true)
+      // .eq('is_featured', true) // Buka komentar ini jika skema DB mendukung
+      .order('created_at', { ascending: false })
+      .limit(4);
+
+    if (error) {
+      console.error('[Service Error] getFeaturedVenues:', error.message);
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('[Service Exception] getFeaturedVenues:', err);
+    return [];
   }
 }

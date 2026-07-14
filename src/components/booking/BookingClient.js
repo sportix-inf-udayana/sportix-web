@@ -1,149 +1,159 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect, useCallback } from "react";
-import { createBrowserClient } from "@supabase/ssr";
-import { Loader2, AlertTriangle, ShieldCheck, MapPin } from "lucide-react";
-import { clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { useState, useEffect, useTransition } from 'react';
+import { fetchAvailableSlotsAction, submitBookingAction } from '@/app/(customer)/booking/[venueId]/_actions.js';
 
-import DateCarousel from "./DateCarousel";
-import SlotGrid from "./SlotGrid";
-import PaymentDrawer from "./PaymentDrawer";
-import { getAvailableSlots } from "../../../lib/services/venue.service";
-
-const cn = (...inputs) => twMerge(clsx(inputs));
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
-
-export default function BookingClient({ venue }) {
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [slots, setSlots] = useState([]);
-  const [loadingSlots, setLoadingSlots] = useState(true);
-  const [selectedSlot, setSelectedSlot] = useState(null);
+export default function BookingClient({ initialVenueData }) {
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [selectedSlots, setSelectedSlots] = useState([]);
   
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [activeToken, setActiveToken] = useState(null);
-  const [errorLog, setErrorLog] = useState(null);
+  // State untuk menangani error saat checkout
+  const [checkoutError, setCheckoutError] = useState(null);
+  
+  const [isFetchingSlots, setIsFetchingSlots] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  const fetchSlotsForDate = useCallback(async (dateStr) => {
-    setLoadingSlots(true);
-    setErrorLog(null);
-    setSelectedSlot(null); 
+  const totalPrice = selectedSlots.length * initialVenueData.price_per_hour;
 
-    const { slots: fetchedSlots, error } = await getAvailableSlots(supabase, venue.id, dateStr);
-    
-    if (error) {
-      setErrorLog(error);
-    } else {
-      setSlots(fetchedSlots);
-    }
-    
-    setLoadingSlots(false);
-  }, [venue.id]);
-
+  // Fetch slot setiap kali tanggal berubah
   useEffect(() => {
-    fetchSlotsForDate(selectedDate);
-  }, [selectedDate, fetchSlotsForDate]);
+    let isMounted = true;
 
-  const handleOpenPaymentGate = async () => {
-    if (!selectedSlot) return;
-    setErrorLog(null);
+    const loadSlots = async () => {
+      setIsFetchingSlots(true);
+      setSelectedSlots([]); // Reset pilihan jika tanggal berubah
+      setCheckoutError(null); // Reset error jika user mengganti tanggal
 
-    try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const result = await fetchAvailableSlotsAction(initialVenueData.id, selectedDate);
       
-      if (sessionError || !session) {
-        throw new Error("Otorisasi terputus. Sesi Anda tidak valid, harap log in kembali.");
+      if (isMounted) {
+        if (!result.error && result.data) {
+          setAvailableSlots(result.data);
+        } else {
+          setAvailableSlots([]); // Fallback jika gagal
+        }
+        setIsFetchingSlots(false);
       }
+    };
 
-      setActiveToken(session.access_token);
-      setIsDrawerOpen(true);
-    } catch (err) {
-      setErrorLog(err.message);
-      fetchSlotsForDate(selectedDate);
-      setSelectedSlot(null);
-    }
+    loadSlots();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDate, initialVenueData.id]);
+
+  const handleSlotToggle = (slotId) => {
+    setSelectedSlots((prev) => 
+      prev.includes(slotId) ? prev.filter(id => id !== slotId) : [...prev, slotId]
+    );
+  };
+
+  const handleCheckout = () => {
+    if (selectedSlots.length === 0) return;
+
+    setCheckoutError(null);
+    startTransition(async () => {
+      const result = await submitBookingAction({ 
+        venueId: initialVenueData.id, 
+        date: selectedDate, 
+        slots: selectedSlots 
+      });
+
+      // Jika berhasil, Action akan me-redirect pengguna secara otomatis.
+      // Jika sampai di baris ini, berarti ada error yang direturn dari server.
+      if (result?.error) {
+        setCheckoutError(result.error);
+      }
+    });
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-12 font-sans">
-      
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 md:p-8">
-        <h1 className="text-3xl font-black text-white tracking-tight uppercase mb-2">
-          {venue.name}
-        </h1>
-        <div className="flex items-center gap-2 text-zinc-400 text-sm">
-          <MapPin className="w-4 h-4 text-brand-emerald" />
-          <span>{venue.address}</span>
-        </div>
-      </div>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Kolom Kiri: Pemilihan Tanggal dan Slot */}
+      <div className="lg:col-span-2 space-y-6">
+        <section className="bg-white p-6 rounded-xl border border-gray-200">
+          <h2 className="text-xl font-semibold mb-4">Select Date</h2>
+          <input 
+            type="date" 
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            disabled={isPending}
+            className="border p-2 rounded w-full md:w-auto focus:outline-none focus:border-blue-500 disabled:opacity-50"
+            min={new Date().toISOString().split('T')[0]}
+          />
+        </section>
 
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-mono font-bold tracking-wider text-zinc-500 uppercase">1. Tentukan Titik Waktu</h3>
-        </div>
-        <DateCarousel selectedDate={selectedDate} onSelectDate={setSelectedDate} />
-      </div>
-
-      {errorLog && (
-        <div className="flex items-start gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400">
-          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-bold font-mono">INTERUPSI SISTEM</p>
-            <p className="mt-1 opacity-90">{errorLog}</p>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-mono font-bold tracking-wider text-zinc-500 uppercase">2. Pilih Kapasitas (Jam)</h3>
-          {loadingSlots && <Loader2 className="w-4 h-4 animate-spin text-brand-emerald" />}
-        </div>
-        
-        {loadingSlots ? (
-          <div className="h-48 flex items-center justify-center border border-zinc-800 border-dashed rounded-xl">
-             <span className="text-xs font-mono text-zinc-500">MENGAMBIL LEDGER JADWAL...</span>
-          </div>
-        ) : (
-          <SlotGrid slots={slots} selectedSlot={selectedSlot} onSelectSlot={setSelectedSlot} />
-        )}
-      </div>
-
-      <div className="pt-6 border-t border-zinc-800">
-        <button
-          onClick={handleOpenPaymentGate}
-          disabled={!selectedSlot || loadingSlots}
-          className={cn(
-            "w-full py-4 rounded-xl font-mono text-sm font-bold flex items-center justify-center gap-3 transition-all cursor-pointer",
-            !selectedSlot 
-              ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
-              : "bg-brand-emerald text-background hover:bg-brand-emerald/90 hover:scale-[1.01] shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+        <section className="bg-white p-6 rounded-xl border border-gray-200 min-h-[200px]">
+          <h2 className="text-xl font-semibold mb-4">Available Slots</h2>
+          
+          {isFetchingSlots ? (
+            <div className="flex justify-center items-center h-20 text-gray-500">
+              Loading slots...
+            </div>
+          ) : availableSlots.length > 0 ? (
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+              {availableSlots.map(slot => (
+                <button 
+                  key={slot.id}
+                  onClick={() => handleSlotToggle(slot.id)}
+                  disabled={isPending}
+                  className={`p-3 rounded border transition-colors ${
+                    selectedSlots.includes(slot.id) 
+                      ? 'bg-blue-600 text-white border-blue-600' 
+                      : 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-800'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {slot.start_time.slice(0, 5)} - {slot.end_time.slice(0, 5)}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-gray-500 py-6">
+              No slots available for this date.
+            </div>
           )}
-        >
-          <ShieldCheck className="w-5 h-5" />
-          <span>
-            {selectedSlot ? `BUKA KONFIRMASI PEMBAYARAN - RP ${selectedSlot.price.toLocaleString('id-ID')}` : 'PILIH SLOT TERLEBIH DAHULU'}
-          </span>
-        </button>
-        <p className="text-center text-xs text-zinc-500 mt-3 font-mono">
-          MENEKAN TOMBOL AKAN MENGUNCI JADWAL SECARA EKSKLUSIF SELAMA 15 MENIT DI TAHAP BERIKUTNYA
-        </p>
+        </section>
       </div>
 
-      <PaymentDrawer 
-        isOpen={isDrawerOpen}
-        onClose={() => {
-          setIsDrawerOpen(false);
-          fetchSlotsForDate(selectedDate);
-        }}
-        selectedSlot={selectedSlot}
-        venueName={venue.name}
-        authToken={activeToken}
-      />
+      {/* Kolom Kanan: Ringkasan dan Checkout */}
+      <div className="lg:col-span-1">
+        <div className="bg-white p-6 rounded-xl border border-gray-200 sticky top-6">
+          <h2 className="text-xl font-semibold mb-4">Summary</h2>
+          
+          {/* Tampilan Error Checkout */}
+          {checkoutError && (
+            <div className="mb-4 p-3 text-sm text-red-600 bg-red-50 rounded-lg border border-red-200">
+              {checkoutError}
+            </div>
+          )}
+
+          <div className="space-y-3 mb-6 text-gray-700">
+            <div className="flex justify-between">
+              <span>Price per hour</span>
+              <span className="font-medium">Rp {initialVenueData.price_per_hour.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Selected slots</span>
+              <span className="font-medium">{selectedSlots.length}</span>
+            </div>
+            <hr className="my-2 border-gray-200" />
+            <div className="flex justify-between text-lg font-bold text-gray-900">
+              <span>Total</span>
+              <span>Rp {totalPrice.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <button 
+            onClick={handleCheckout}
+            disabled={isPending || selectedSlots.length === 0 || isFetchingSlots}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
+          >
+            {isPending ? 'Processing Transaction...' : 'Proceed to Payment'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

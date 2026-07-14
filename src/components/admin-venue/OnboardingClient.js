@@ -1,120 +1,67 @@
-"use client";
+'use client';
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import Image from "next/image";
-import { Loader2, CheckCircle2, Store, ImageOff } from "lucide-react";
+import { useState, useTransition } from 'react';
+import { submitVenueOnboardingAction } from '@/app/(dashboard)/admin-venue/_actions';
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL, 
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+export default function OnboardingClient() {
+  const [error, setError] = useState(null);
+  const [isPending, startTransition] = useTransition();
 
-const onboardingSchema = z.object({
-  name: z.string().min(3, "Nama toko minimal 3 karakter"),
-  address: z.string().min(10, "Alamat operasional harus jelas (min 10 karakter)"),
-  image_url: z.string().url("Format URL gambar tidak valid").optional().or(z.literal('')),
-});
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setError(null);
+    const formData = new FormData(e.currentTarget);
 
-// TERIMA userId SEBAGAI PROP, JANGAN FETCH DI CLIENT
-export default function OnboardingClient({ userId }) {
-  const router = useRouter();
-  const [authError, setAuthError] = useState(null);
-  const [imageError, setImageError] = useState(false);
-
-  const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm({
-    resolver: zodResolver(onboardingSchema),
-    defaultValues: { image_url: "" }
-  });
-
-  const currentImageUrl = watch("image_url");
-
-  const onSubmit = async (data) => {
-    setAuthError(null);
-    try {
-      if (!userId) throw new Error("Sesi pengguna tidak terdeteksi. Silakan muat ulang halaman.");
-
-      const payload = { 
-        owner_id: userId, // Gunakan prop langsung
-        name: data.name, 
-        address: data.address, 
-        image_url: data.image_url && !imageError ? data.image_url : null,
-        status: 'PENDING' 
-      };
-      
-      const { error: insertErr } = await supabase.from("umkm_stores").insert(payload);
-      if (insertErr) throw insertErr;
-      
-      router.refresh();
-      router.push("/seller-umkm/pending");
-    } catch (err) {
-      setAuthError(err.message);
-    }
+    startTransition(async () => {
+      const result = await submitVenueOnboardingAction(formData);
+      if (result?.error) {
+        setError(result.error);
+      }
+    });
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-12 px-6 font-sans">
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-white uppercase tracking-tight">Kemitraan UMKM</h1>
-        <p className="text-zinc-400 mt-2">Registrasikan entitas usaha dan etalase digital Anda.</p>
+    <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-xl border border-gray-200 shadow-sm max-w-2xl mx-auto mt-8">
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900">Venue Registration</h2>
+        <p className="text-gray-500 text-sm mt-1">Please provide your venue details to partner with us.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1 space-y-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-4">
-            <div className="w-full aspect-square rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-center overflow-hidden relative">
-              {currentImageUrl && !imageError && !errors.image_url ? (
-                <Image
-                  src={currentImageUrl}
-                  alt="Preview"
-                  fill
-                  unoptimized
-                  onError={() => setImageError(true)}
-                  onLoadingComplete={() => setImageError(false)}
-                  className="object-cover"
-                />
-              ) : (
-                <div className="flex flex-col items-center text-zinc-600">
-                  {imageError ? <ImageOff className="w-10 h-10 mb-2" /> : <Store className="w-10 h-10 mb-2" />}
-                  <span className="text-[10px] font-mono font-bold tracking-widest uppercase">Etalase Toko</span>
-                </div>
-              )}
-            </div>
-            <p className="text-xs text-zinc-500 font-mono">Tautan logo atau etalase toko UMKM Anda.</p>
-          </div>
+      {error && (
+        <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-4">
+        <div>
+          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Venue Name</label>
+          <input type="text" id="name" name="name" required disabled={isPending} className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6">
-          {authError && <div className="text-red-400 text-sm p-3 bg-red-950/20 border border-red-900/50 rounded-lg">{authError}</div>}
-          
-          <div className="space-y-2">
-            <label className="text-xs font-mono font-bold text-zinc-400 uppercase block">URL Foto Toko (Opsional)</label>
-            <input disabled={isSubmitting} type="text" placeholder="https://example.com/store.jpg" {...register("image_url")} onChange={() => setImageError(false)} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-3 px-4 text-white focus:border-purple-500 focus:outline-none transition-colors disabled:opacity-50" />
-            {errors.image_url && <p className="text-red-400 text-xs mt-1">{errors.image_url.message}</p>}
-          </div>
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Business Phone</label>
+          <input type="tel" id="phone" name="phone" required disabled={isPending} className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" />
+        </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-mono font-bold text-zinc-400 uppercase block">Nama Toko</label>
-            <input disabled={isSubmitting} type="text" {...register("name")} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-3 px-4 text-white focus:border-purple-500 focus:outline-none transition-colors disabled:opacity-50" />
-            {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name.message}</p>}
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-xs font-mono font-bold text-zinc-400 uppercase block">Alamat Operasional</label>
-            <textarea disabled={isSubmitting} rows={3} {...register("address")} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-3 px-4 text-white focus:border-purple-500 focus:outline-none resize-none transition-colors disabled:opacity-50" />
-            {errors.address && <p className="text-red-400 text-xs mt-1">{errors.address.message}</p>}
-          </div>
-          
-          <button type="submit" disabled={isSubmitting} className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold font-mono text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer shadow-md">
-            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-            {isSubmitting ? "MENYIMPAN DATA..." : "DAFTARKAN TOKO UMKM"}
-          </button>
-        </form>
+        <div>
+          <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">Full Address</label>
+          <textarea id="address" name="address" required rows="3" disabled={isPending} className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+        </div>
+
+        <div>
+          <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description / Facilities</label>
+          <textarea id="description" name="description" rows="4" disabled={isPending} className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+        </div>
       </div>
-    </div>
+
+      <button 
+        type="submit" 
+        disabled={isPending}
+        className="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+      >
+        {isPending ? 'Submitting...' : 'Submit Application'}
+      </button>
+    </form>
   );
 }

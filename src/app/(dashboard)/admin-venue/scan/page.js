@@ -1,47 +1,44 @@
-import React from "react";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { createServerClient } from "@supabase/ssr";
-import ScannerClient from "@/components/admin-venue/ScannerClient";
-import { ENTITY_STATUS } from "@/lib/constants";
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import ScannerClient from '@/components/admin-venue/ScannerClient';
 
-export const dynamic = 'force-dynamic';
+export const metadata = {
+  title: 'Scan Tickets - Admin Venue',
+};
 
-export default async function AdminVenueScanPage() {
+export default async function ScanPage() {
   const cookieStore = cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { cookies: { getAll: () => cookieStore.getAll() } }
+    { cookies: { getAll() { return cookieStore.getAll() } } }
   );
 
-  // 1. GUNAKAN getSession() ALIH-ALIH getUser()
-  // Jauh lebih cepat karena membaca JWT. Middleware sudah memblokir akses ilegal.
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session) {
-    redirect("/login");
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) redirect('/login');
+
+  // GUARD: Otorisasi Ketat Tenant
+  const { data: venue } = await supabase
+    .from('venues')
+    .select('id, status, is_active')
+    .eq('owner_id', user.id)
+    .single();
+
+  if (!venue || venue.status !== 'approved' || !venue.is_active) {
+    redirect('/admin-venue/pending');
   }
 
-  // 2. PROTEKSI ONBOARDING
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("status")
-    .eq("owner_id", session.user.id)
-    .maybeSingle();
-
-  if (!venue) redirect("/admin-venue/onboarding");
-  if (venue.status === ENTITY_STATUS.PENDING) redirect("/admin-venue/pending");
-
   return (
-    <div className="space-y-6 w-full text-white max-w-xl mx-auto">
-      <div className="border-b border-zinc-800 pb-4">
-        <h1 className="text-2xl font-black text-white font-display uppercase tracking-tight">Verifikasi Akses Karcis</h1>
-        <p className="text-zinc-500 text-xs font-mono mt-1">Arahkan QR Code penyewa ke kamera untuk validasi instan.</p>
-      </div>
+    <main className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
+      <header>
+        <h1 className="text-3xl font-bold text-gray-900">Ticket Scanner</h1>
+        <p className="text-gray-500 mt-1">Scan customer QR codes to verify bookings.</p>
+      </header>
 
-      {/* 3. PROP PASSING: Eksekusi hasil refaktor komponen klien sebelumnya */}
-      <ScannerClient accessToken={session.access_token} />
-    </div>
+      {/* Melempar venueId agar action di server tahu tiket ini discan untuk venue mana */}
+      <ScannerClient venueId={venue.id} />
+    </main>
   );
 }
