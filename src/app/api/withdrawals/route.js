@@ -1,19 +1,22 @@
-import { NextResponse } from "next/server";
-import { withAuthAndCatch } from "../../../lib/api-wrapper";
-import { ROLE } from "../../../lib/constants";
+// src/app/api/withdrawals/route.js
+import { withAuthAndCatch } from '@/lib/api-wrapper';
+import { USER_ROLES } from '@/lib/constants';
 
-async function getWithdrawalsHandler(req, { supabase, user }) {
-  let query = supabase.from("withdrawals").select("*, users(email)");
+export const GET = withAuthAndCatch(async (req, { supabase, user }) => {
+  const role = user.user_metadata?.role;
   
-  // Jika bukan admin, hanya ambil milik sendiri
-  if (user.user_metadata?.role !== ROLE.SUPER_ADMIN) {
-    query = query.eq("user_id", user.id);
+  let query = supabase
+    .from('withdrawals')
+    .select('id, amount, bank_name, account_number, status, created_at, profiles(full_name)')
+    .order('created_at', { ascending: false });
+
+  if (role !== USER_ROLES.SUPER_ADMIN) {
+    query = query.eq('user_id', user.id);
   }
 
-  const { data, error } = await query.order("created_at", { ascending: false });
+  const { data, error } = await query;
+
   if (error) throw error;
 
-  return NextResponse.json({ success: true, data });
-}
-
-export const GET = withAuthAndCatch(getWithdrawalsHandler);
+  return data || [];
+});

@@ -1,7 +1,9 @@
+// src/lib/services/coach.service.js
 import { AppError } from '@/lib/api-wrapper';
+import { ENTITY_STATUS } from '@/lib/constants';
 
 export async function getCoachWalletData(supabase, userId) {
-  if (!userId) throw new AppError('User ID is required.', 400);
+  if (!userId) throw new AppError('User ID required.', 400);
 
   const [
     { data: balance, error: balanceErr },
@@ -9,7 +11,7 @@ export async function getCoachWalletData(supabase, userId) {
   ] = await Promise.all([
     supabase
       .from('balances')
-      .select('available_balance, pending_balance')
+      .select('amount, pending_balance')
       .eq('user_id', userId)
       .maybeSingle(),
     supabase
@@ -25,7 +27,7 @@ export async function getCoachWalletData(supabase, userId) {
 
   return {
     data: {
-      availableBalance: balance?.available_balance || 0,
+      availableBalance: balance?.amount || 0,
       pendingBalance: balance?.pending_balance || 0,
       ledgerHistory: ledger || [],
     },
@@ -34,16 +36,18 @@ export async function getCoachWalletData(supabase, userId) {
 }
 
 export async function getCoachScheduleData(supabase, userId) {
-  if (!userId) throw new AppError('User ID is required.', 400);
+  if (!userId) throw new AppError('User ID required.', 400);
 
   const { data: coachProfile, error: profileErr } = await supabase
     .from('coaches')
-    .select('id')
+    .select('id, status')
     .eq('user_id', userId)
     .maybeSingle();
 
   if (profileErr) throw new AppError(`Profile error: ${profileErr.message}`, 500);
-  if (!coachProfile) return { data: { coachProfile: null }, error: null };
+  if (!coachProfile || coachProfile.status !== ENTITY_STATUS.APPROVED) {
+    return { data: { coachProfile: null }, error: null };
+  }
 
   const todayWITA = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
 
@@ -54,7 +58,7 @@ export async function getCoachScheduleData(supabase, userId) {
   ] = await Promise.all([
     supabase
       .from('balances')
-      .select('available_balance')
+      .select('amount')
       .eq('user_id', userId)
       .maybeSingle(),
     supabase
@@ -65,7 +69,7 @@ export async function getCoachScheduleData(supabase, userId) {
       .limit(3),
     supabase
       .from('coach_bookings')
-      .select('id, booking_date, start_time, end_time, status, users (full_name)')
+      .select('id, booking_date, start_time, end_time, status, total_price, reservations ( users ( full_name ) )')
       .eq('coach_id', coachProfile.id)
       .gte('booking_date', todayWITA)
       .order('booking_date', { ascending: true })
@@ -74,13 +78,13 @@ export async function getCoachScheduleData(supabase, userId) {
   ]);
 
   if (balanceErr || activityErr || scheduleErr) {
-    throw new AppError('Gagal memuat data jadwal instruktur.', 500);
+    throw new AppError('Gagal memuat matriks jadwal instruktur.', 500);
   }
 
   return {
     data: {
       coachProfile,
-      balance: balance?.available_balance || 0,
+      balance: balance?.amount || 0,
       recentActivity: activity || [],
       schedules: schedules || []
     },

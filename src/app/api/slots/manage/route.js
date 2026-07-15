@@ -1,23 +1,23 @@
 // src/app/api/slots/manage/route.js
-import { NextResponse } from "next/server";
-import { withAuthAndCatch } from "@/lib/api-wrapper";
-import { AdminService } from "@/lib/services/admin.service";
-import { manageSlotSchema } from "@/lib/validators/slot.validator";
+import { z } from 'zod';
+import { withAuthAndCatch } from '@/lib/api-wrapper';
+import { AdminService } from '@/lib/services/admin.service';
+import { SLOT_STATUS } from '@/lib/constants';
 
-async function patchSlotHandler(req, { supabase, user }) {
-  const body = await req.json();
+const manageSlotSchema = z.object({
+  slotId: z.string().uuid(),
+  targetState: z.enum([SLOT_STATUS.AVAILABLE, SLOT_STATUS.UNAVAILABLE]),
+  expectedCurrentState: z.string().optional()
+});
+
+export const PATCH = withAuthAndCatch(async (req, { supabase, user }) => {
+  const payload = manageSlotSchema.parse(await req.json());
   
-  // 1. Validasi Input (Zod harus dipisah ke file validator)
-  const validatedData = manageSlotSchema.parse(body);
-
-  // 2. Delegasikan ke Service Layer
-  const result = await AdminService.updateSlotStatus({
+  return await AdminService.updateSlotStatus({
     supabase,
     userId: user.id,
-    ...validatedData
+    slotId: payload.slotId,
+    targetState: payload.targetState,
+    expectedCurrentState: payload.expectedCurrentState
   });
-
-  return NextResponse.json({ success: true, message: result.message });
-}
-
-export const PATCH = withAuthAndCatch(patchSlotHandler);
+});

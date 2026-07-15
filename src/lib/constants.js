@@ -1,3 +1,4 @@
+// src/lib/constants.js
 export const APP_CONFIG = {
   baseUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
   routes: {
@@ -47,6 +48,11 @@ export const BOOKING_STATUS = {
   FORFEITED: 'FORFEITED',
   EXPIRED_PAID: 'EXPIRED_PAID',
   CANCELLED_BY_ADMIN: 'CANCELLED_BY_ADMIN'
+};
+
+export const TRANSACTION_TYPE = {
+  CREDIT: 'CREDIT',
+  DEBIT: 'DEBIT'
 };
 
 export const BUSINESS_RULES = {

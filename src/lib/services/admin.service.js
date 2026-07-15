@@ -1,3 +1,4 @@
+// src/lib/services/admin.service.js
 import { AppError } from '@/lib/api-wrapper';
 import { SLOT_STATUS, BOOKING_STATUS } from '@/lib/constants';
 
@@ -55,11 +56,12 @@ export class AdminService {
     
     const updatePayload = {
       status: targetState,
+      is_available: isAvailable,
       ...(isAvailable && { locked_until: null, reservation_id: null, locked_by: null })
     };
 
     let updateQuery = supabase
-      .from('slots')
+      .from('venue_slots')
       .update(updatePayload)
       .eq('id', slotId)
       .eq('venue_id', venue.id)

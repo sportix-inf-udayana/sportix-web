@@ -1,3 +1,4 @@
+// src/lib/services/umkm.service.js
 import { AppError } from '@/lib/api-wrapper';
 
 const MIDTRANS_URL = process.env.MIDTRANS_API_URL || "https://app.sandbox.midtrans.com/snap/v1/transactions";
@@ -94,6 +95,7 @@ export class UmkmService {
     }
 
     const midtransOrderId = `MKM-${insertedOrders[0].id}-${Date.now()}`;
+    const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
     
     const midtransResponse = await fetch(MIDTRANS_URL, {
       method: "POST",
@@ -105,7 +107,7 @@ export class UmkmService {
       body: JSON.stringify({
         transaction_details: { order_id: midtransOrderId, gross_amount: totalGrossAmount },
         item_details: verifiedItemsForMidtrans,
-        customer_details: { email: user.email, first_name: user.user_metadata?.full_name || "Customer" },
+        customer_details: { email: user.email, first_name: profile?.full_name || "Customer" },
         expiry: {
           start_time: new Date().toISOString().replace("T", " ").substring(0, 19) + " +0800",
           unit: "minutes",
@@ -115,6 +117,7 @@ export class UmkmService {
     });
 
     const midtransData = await midtransResponse.json();
+
     if (!midtransResponse.ok || !midtransData.token) {
       throw new AppError("Payment Gateway menolak token.", 502);
     }

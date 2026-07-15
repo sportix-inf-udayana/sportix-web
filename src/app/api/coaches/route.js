@@ -1,57 +1,48 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { withAuthAndCatch } from "../../../lib/api-wrapper";
+// src/app/api/coaches/route.js
+import { z } from 'zod';
+import { withAuthAndCatch, AppError } from '@/lib/api-wrapper';
+import { ENTITY_STATUS } from '@/lib/constants';
 
 const bookingSchema = z.object({
-  coachId: z.string().uuid("ID Pelatih tidak valid"),
-  reservationId: z.string().uuid("ID Reservasi tidak valid"),
-  bookingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD"),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/, "Format HH:MM"),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/, "Format HH:MM")
+  coachId: z.string().uuid(),
+  reservationId: z.string().uuid(),
+  bookingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/)
 });
 
-async function coachBookingHandler(req, { supabase, user }) {
-  const startTimeMs = Date.now();
-  const body = await req.json();
-  const { coachId, reservationId, bookingDate, startTime, endTime } = bookingSchema.parse(body);
+export const POST = withAuthAndCatch(async (req, { supabase, user }) => {
+  const payload = bookingSchema.parse(await req.json());
 
-  const { data: coachData, error: coachErr } = await supabase
-    .from("coaches")
-    .select("price_per_hour, status")
-    .eq("id", coachId)
+  const { data: coach, error: coachErr } = await supabase
+    .from('coaches')
+    .select('price_per_hour, status')
+    .eq('id', payload.coachId)
     .single();
 
-  if (coachErr || !coachData || coachData.status !== 'APPROVED') {
-    return NextResponse.json({ success: false, message: "Pelatih tidak valid atau tidak aktif." }, { status: 404 });
+  if (coachErr || !coach || coach.status !== ENTITY_STATUS.APPROVED) {
+    throw new AppError('Pelatih tidak valid atau belum disetujui.', 404);
   }
 
   const { data: booking, error: insertError } = await supabase
-    .from("coach_bookings")
+    .from('coach_bookings')
     .insert({
       user_id: user.id,
-      coach_id: coachId,
-      reservation_id: reservationId,
-      booking_date: bookingDate,
-      start_time: startTime,
-      end_time: endTime,
-      total_price: coachData.price_per_hour,
-      status: "CONFIRMED"
+      coach_id: payload.coachId,
+      reservation_id: payload.reservationId,
+      booking_date: payload.bookingDate,
+      start_time: payload.startTime,
+      end_time: payload.endTime,
+      total_price: coach.price_per_hour,
+      status: 'CONFIRMED'
     })
-    .select()
+    .select('id')
     .single();
 
   if (insertError) {
-    if (insertError.code === '23505') { 
-      return NextResponse.json({ success: false, message: "Pelatih sudah dibooking pada jadwal ini." }, { status: 409 });
-    }
+    if (insertError.code === '23505') throw new AppError('Jadwal bentrok.', 409);
     throw insertError;
   }
 
-  return NextResponse.json({
-    success: true,
-    bookingId: booking.id,
-    executionMs: Date.now() - startTimeMs
-  });
-}
-
-export const POST = withAuthAndCatch(coachBookingHandler);
+  return { bookingId: booking.id };
+});
