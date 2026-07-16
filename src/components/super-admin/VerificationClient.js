@@ -1,24 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { Check, X, Loader2, AlertCircle, ShieldCheck } from "lucide-react";
-
-// Inisiasi Supabase di luar komponen utama
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+import { getSupabase } from "@/lib/supabase";
 
 export default function VerificationClient({ initialItems }) {
   const [items, setItems] = useState(initialItems || []);
   const [processingId, setProcessingId] = useState(null);
   const [networkError, setNetworkError] = useState(null);
+  const supabase = getSupabase();
 
   const handleAuditAction = async (entityId, entityType, action) => {
     setProcessingId(entityId);
     setNetworkError(null);
-
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session) {
@@ -35,9 +29,8 @@ export default function VerificationClient({ initialItems }) {
       });
 
       const result = await response.json();
-
       if (!response.ok) throw new Error(result.message || "Gagal memperbarui status verifikasi mitra.");
-
+      
       setItems(prev => prev.filter(item => item.id !== entityId));
     } catch (err) {
       console.error(err);
@@ -55,13 +48,11 @@ export default function VerificationClient({ initialItems }) {
           <span>VERIFICATION_GATEWAY_ERROR: {networkError}</span>
         </div>
       )}
-
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
         <div className="flex items-center gap-2 mb-6 border-b border-zinc-800 pb-4">
           <ShieldCheck className="w-5 h-5 text-red-400" />
           <h3 className="text-sm font-mono font-bold uppercase tracking-wider">Antrean Onboarding Mitra Regional</h3>
         </div>
-
         {items.length === 0 ? (
           <div className="text-center py-12 border border-dashed border-zinc-800 rounded-lg text-zinc-500 text-xs font-mono">
             TIDAK ADA ENTITAS DALAM ANTRIAN AUDIT BERKAS
@@ -77,7 +68,6 @@ export default function VerificationClient({ initialItems }) {
                   <h4 className="text-sm font-bold text-white">{entity.name}</h4>
                   <p className="text-xs text-zinc-500 mt-0.5">{entity.address || "No Address Provided"}</p>
                 </div>
-
                 <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                   <button
                     disabled={processingId === entity.id}

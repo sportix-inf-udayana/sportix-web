@@ -1,14 +1,14 @@
-import { NextResponse } from "next/server";
-import { withAuthAndCatch } from "../../../lib/api-wrapper";
+// src/app/api/umkm/route.js
+import { withAuthAndCatch } from '@/lib/api-wrapper';
+import { ENTITY_STATUS } from '@/lib/constants';
 
-async function getUmkmHandler(req, { supabase }) {
-  const { data: products, error } = await supabase
-    .from("umkm_products")
-    .select("id, name, price, stock, umkm_stores(name)")
-    .eq("status", "APPROVED");
+export const GET = withAuthAndCatch(async (req, { supabase }) => {
+  const { data, error } = await supabase
+    .from('umkm_products')
+    .select('id, name, price, stock, umkm_stores!inner(name, status)')
+    .eq('is_active', true)
+    .eq('umkm_stores.status', ENTITY_STATUS.APPROVED);
 
   if (error) throw error;
-  return NextResponse.json({ success: true, products });
-}
-
-export const GET = withAuthAndCatch(getUmkmHandler);
+  return data || [];
+});

@@ -1,34 +1,66 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* src/app/globals.css */
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 
 @layer base {
   :root {
-    --background: #09090b;
-    --foreground: #ffffff;
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+  }
+
+  body {
+    background-color: rgb(9, 9, 11);
+    color: rgb(244, 244, 245);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  ::selection {
+    background-color: rgba(16, 185, 129, 0.3);
+    color: rgb(16, 185, 129);
   }
 }
 
 @layer utilities {
-  .glow-emerald {
-    box-shadow: 0 0 25px rgba(16, 185, 129, 0.2);
+  .scrollbar-none {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
   }
+  
+  .scrollbar-none::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+  }
+  
+  .text-balance {
+    text-wrap: balance;
+  }
+}
 
-  .glow-amber {
-    box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
-  }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
-  .glass-panel {
-    @apply bg-zinc-900/85 backdrop-blur-md border border-zinc-800;
-  }
+@keyframes slideInRight {
+  from { transform: translateX(2rem); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
 
-  .mesh-bg {
-    background-color: var(--background);
-    background-image: 
-      radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 50%), 
-      radial-gradient(at 100% 100%, rgba(16, 129, 129, 0.08) 0px, transparent 50%);
-    background-attachment: fixed;
-  }
+@keyframes slideInBottom {
+  from { transform: translateY(1rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-in.fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+.slide-in-from-right-8 {
+  animation: slideInRight 0.3s ease-out forwards;
+}
+
+.slide-in-from-bottom-4 {
+  animation: slideInBottom 0.3s ease-out forwards;
 }

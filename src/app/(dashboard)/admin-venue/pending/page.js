@@ -1,3 +1,4 @@
+// src/app/(dashboard)/admin-venue/pending/page.js
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -16,7 +17,7 @@ export default async function VenuePendingPage() {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   if (!user) {
     redirect('/login');
   }
@@ -38,12 +39,11 @@ export default async function VenuePendingPage() {
     redirect('/admin-venue');
   }
 
+  // PendingUI sudah memiliki styling yang proporsional untuk dark mode
   return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <PendingUI 
-        title="Venue Application Pending"
-        message="Thank you for registering your venue. Our team is verifying your details. You will gain access to the dashboard once approved."
-      />
-    </main>
+    <PendingUI 
+      title="Venue Application Pending"
+      message="Thank you for registering your venue. Our team is verifying your details. You will gain access to the dashboard once approved."
+    />
   );
 }

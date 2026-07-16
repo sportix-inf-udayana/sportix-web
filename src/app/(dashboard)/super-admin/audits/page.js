@@ -2,9 +2,9 @@ import React from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
-import { getGlobalFinancialMetrics } from "../../../../lib/services/admin.service";
-import FinancialMetricsCards from "../../../../components/super-admin/FinancialMetricsCards";
-import LedgerStreamTable from "../../../../components/super-admin/LedgerStreamTable";
+import { getGlobalFinancialMetrics } from "@/lib/services/admin.service";
+import FinancialMetricsCards from "@/components/super-admin/FinancialMetricsCards";
+import LedgerStreamTable from "@/components/super-admin/LedgerStreamTable";
 
 export const dynamic = 'force-dynamic';
 

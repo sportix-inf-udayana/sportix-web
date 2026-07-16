@@ -1,19 +1,16 @@
+// src/lib/validators/booking.validator.js
+import { z } from 'zod';
 import { AppError } from '@/lib/api-wrapper';
 
+const bookingSchema = z.object({
+  venueId: z.string().uuid('Identitas venue tidak valid.'),
+  slotIds: z.array(z.string().uuid('Format slot tidak valid.')).min(1, 'Pilih minimal satu slot waktu.')
+});
+
 export const validateBookingPayload = (data) => {
-  const { venueId, slotIds, userId, paymentMethod } = data;
-
-  if (!venueId || typeof venueId !== 'string') {
-    throw new AppError('Identitas venue tidak valid atau hilang.', 400);
+  const parsed = bookingSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new AppError(parsed.error.errors[0].message, 400);
   }
-
-  if (!Array.isArray(slotIds) || slotIds.length === 0) {
-    throw new AppError('Harus memilih minimal satu slot waktu.', 400);
-  }
-
-  if (!userId) {
-    throw new AppError('Sesi pengguna tidak valid.', 401);
-  }
-
-  return { venueId, slotIds, userId, paymentMethod };
+  return parsed.data;
 };

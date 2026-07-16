@@ -2,14 +2,12 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Image from "next/image";
 import * as z from "zod";
 import { Loader2, CheckCircle2, Store, ImageOff } from "lucide-react";
-
-const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+import { getSupabase } from "@/lib/supabase";
 
 const onboardingSchema = z.object({
   name: z.string().min(3, "Nama toko minimal 3 karakter"),
@@ -21,6 +19,7 @@ export default function OnboardingClient() {
   const router = useRouter();
   const [authError, setAuthError] = useState(null);
   const [imageError, setImageError] = useState(false);
+  const supabase = getSupabase();
 
   const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(onboardingSchema),
@@ -34,11 +33,11 @@ export default function OnboardingClient() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const payload = { 
-        owner_id: user.id, 
-        name: data.name, 
-        address: data.address, 
-        image_url: data.image_url && !imageError ? data.image_url : null,
-        status: 'PENDING' 
+         owner_id: user.id,
+         name: data.name,
+         address: data.address,
+         image_url: data.image_url && !imageError ? data.image_url : null,
+         status: 'PENDING' 
       };
       
       const { error: insertErr } = await supabase.from("umkm_stores").insert(payload);
@@ -57,10 +56,9 @@ export default function OnboardingClient() {
         <h1 className="text-3xl font-black text-white uppercase tracking-tight">Kemitraan UMKM</h1>
         <p className="text-zinc-400 mt-2">Registrasikan entitas usaha dan etalase digital Anda.</p>
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 space-y-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex flex-col items-center text-center">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex flex-col items-center text-center"> 
              <div className="w-full aspect-square bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-center overflow-hidden mb-4 relative">
                 {currentImageUrl && !imageError ? (
                   <Image
@@ -70,7 +68,6 @@ export default function OnboardingClient() {
                     className="object-cover"
                     unoptimized
                     onError={() => setImageError(true)}
-                    onLoadingComplete={() => setImageError(false)}
                   />
                 ) : (
                   <div className="flex flex-col items-center text-zinc-600">
@@ -78,11 +75,10 @@ export default function OnboardingClient() {
                     <span className="text-[10px] font-mono font-bold tracking-widest uppercase">Etalase Toko</span>
                   </div>
                 )}
-             </div>
+             </div> 
              <p className="text-xs text-zinc-500 font-mono">Tautan logo atau etalase toko UMKM Anda akan dirender di sini.</p>
           </div>
         </div>
-
         <form onSubmit={handleSubmit(onSubmit)} className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6">
           {authError && <div className="text-red-400 text-sm p-3 bg-red-950/20 border border-red-900/50 rounded-lg">{authError}</div>}
           
@@ -91,7 +87,6 @@ export default function OnboardingClient() {
             <input disabled={isSubmitting} type="text" placeholder="https://example.com/store.jpg" {...register("image_url")} onChange={() => setImageError(false)} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-3 px-4 text-white focus:border-purple-500 focus:outline-none transition-colors disabled:opacity-50" />
             {errors.image_url && <p className="text-red-400 text-xs mt-1">{errors.image_url.message}</p>}
           </div>
-
           <div className="space-y-2">
             <label className="text-xs font-mono font-bold text-zinc-400 uppercase block">Nama Toko</label>
             <input disabled={isSubmitting} type="text" {...register("name")} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-3 px-4 text-white focus:border-purple-500 focus:outline-none transition-colors disabled:opacity-50" />

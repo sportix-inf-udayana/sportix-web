@@ -1,7 +1,11 @@
+// src/app/(dashboard)/admin-venue/scan/page.js
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import ScannerClient from '@/components/admin-venue/ScannerClient';
+import { ENTITY_STATUS } from '@/lib/constants';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Scan Tickets - Admin Venue',
@@ -15,30 +19,26 @@ export default async function ScanPage() {
     { cookies: { getAll() { return cookieStore.getAll() } } }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error || !session) redirect('/login');
 
-  if (!user) redirect('/login');
-
-  // GUARD: Otorisasi Ketat Tenant
   const { data: venue } = await supabase
     .from('venues')
     .select('id, status, is_active')
-    .eq('owner_id', user.id)
+    .eq('owner_id', session.user.id)
     .single();
 
-  if (!venue || venue.status !== 'approved' || !venue.is_active) {
+  if (!venue || venue.status !== ENTITY_STATUS.APPROVED || !venue.is_active) {
     redirect('/admin-venue/pending');
   }
 
   return (
-    <main className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-3xl font-bold text-gray-900">Ticket Scanner</h1>
-        <p className="text-gray-500 mt-1">Scan customer QR codes to verify bookings.</p>
-      </header>
-
-      {/* Melempar venueId agar action di server tahu tiket ini discan untuk venue mana */}
-      <ScannerClient venueId={venue.id} />
+    <main className="space-y-6 w-full text-white font-sans">
+      <div className="border-b border-zinc-800 pb-4">
+        <h1 className="text-2xl font-black text-white font-display uppercase tracking-tight">Kamera Verifikasi Karcis</h1>
+        <p className="text-zinc-500 text-xs font-mono mt-1">Pindai token QR Kustomer untuk konfirmasi kehadiran secara otonom.</p>
+      </div>
+      <ScannerClient accessToken={session.access_token} />
     </main>
   );
 }
