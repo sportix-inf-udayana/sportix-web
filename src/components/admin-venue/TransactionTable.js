@@ -1,60 +1,63 @@
+// src/components/admin-venue/TransactionTable.js
+import React from "react";
+import { BOOKING_STATUS } from "@/lib/constants";
+
 export default function TransactionTable({ transactions = [] }) {
   if (!transactions || transactions.length === 0) {
     return (
-      <div className="text-center py-10 text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-        Belum ada data transaksi untuk venue ini.
+      <div className="text-center py-10 text-zinc-500 bg-zinc-950 rounded-xl border border-dashed border-zinc-800 font-mono text-xs uppercase tracking-widest">
+        TIDAK ADA DATA TRANSAKSI
       </div>
     );
   }
 
   const getStatusBadge = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'success':
-      case 'completed':
-        return <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">Completed</span>;
-      case 'pending':
-        return <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-full">Pending</span>;
-      case 'cancelled':
-      case 'failed':
-        return <span className="px-3 py-1 bg-red-100 text-red-800 text-xs font-semibold rounded-full">Failed</span>;
+    switch (status) {
+      case BOOKING_STATUS.CONFIRMED:
+      case BOOKING_STATUS.CHECKED_IN:
+      case BOOKING_STATUS.COMPLETED:
+        return <span className="px-2 py-0.5 bg-brand-emerald/10 text-brand-emerald border border-brand-emerald/20 text-[10px] font-bold rounded uppercase tracking-widest">SETTLED</span>;
+      case BOOKING_STATUS.PENDING:
+        return <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold rounded uppercase tracking-widest">PENDING</span>;
+      case BOOKING_STATUS.FORFEITED:
+      case BOOKING_STATUS.EXPIRED_PAID:
+        return <span className="px-2 py-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-bold rounded uppercase tracking-widest">{status}</span>;
+      case BOOKING_STATUS.CANCELLED_BY_ADMIN:
+        return <span className="px-2 py-0.5 bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] font-bold rounded uppercase tracking-widest">CANCELLED</span>;
       default:
-        return <span className="px-3 py-1 bg-gray-100 text-gray-800 text-xs font-semibold rounded-full">{status}</span>;
+        return <span className="px-2 py-0.5 bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px] font-bold rounded uppercase tracking-widest">{status}</span>;
     }
   };
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left border-collapse">
+    <div className="overflow-x-auto bg-zinc-900 border border-zinc-800 rounded-xl">
+      <table className="w-full text-left border-collapse text-sm font-sans text-white">
         <thead>
-          <tr className="bg-gray-50 text-gray-600 border-b border-gray-200 text-sm uppercase tracking-wider">
-            <th className="p-4 font-semibold">Booking ID</th>
-            <th className="p-4 font-semibold">Date</th>
-            <th className="p-4 font-semibold">Amount</th>
-            <th className="p-4 font-semibold">Status</th>
-            <th className="p-4 font-semibold">Created At</th>
+          <tr className="bg-zinc-950 border-b border-zinc-800 text-zinc-500 text-[10px] font-mono uppercase tracking-widest">
+            <th className="p-4 font-bold">Booking UUID</th>
+            <th className="p-4 font-bold">Jadwal Main</th>
+            <th className="p-4 font-bold text-right">Volume</th>
+            <th className="p-4 font-bold text-right">Status</th>
+            <th className="p-4 font-bold text-right">Timestamp</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200 text-sm">
+        <tbody className="divide-y divide-zinc-800/60">
           {transactions.map((tx) => (
-            <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
-              <td className="p-4 font-mono text-gray-500">
-                {tx.id.split('-')[0]}... 
+            <tr key={tx.id} className="hover:bg-zinc-800/40 transition-colors">
+              <td className="p-4 font-mono text-zinc-400 text-xs">
+                REV-{tx.id.substring(0, 8)}
               </td>
-              <td className="p-4 text-gray-900 font-medium">
-                {new Date(tx.booking_date).toLocaleDateString('id-ID', {
-                  weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
-                })}
+              <td className="p-4 text-zinc-300 text-xs font-mono font-bold">
+                {tx.booking_date}
               </td>
-              <td className="p-4 font-bold text-gray-900">
-                Rp {tx.total_price?.toLocaleString('id-ID')}
+              <td className="p-4 font-bold text-white text-right font-mono text-xs">
+                Rp {Number(tx.total_price || 0).toLocaleString('id-ID')}
               </td>
-              <td className="p-4">
+              <td className="p-4 text-right">
                 {getStatusBadge(tx.status)}
               </td>
-              <td className="p-4 text-gray-500">
-                {new Date(tx.created_at).toLocaleTimeString('id-ID', {
-                  hour: '2-digit', minute: '2-digit'
-                })}
+              <td className="p-4 text-zinc-500 text-[10px] font-mono text-right">
+                {new Date(tx.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Makassar' })}
               </td>
             </tr>
           ))}

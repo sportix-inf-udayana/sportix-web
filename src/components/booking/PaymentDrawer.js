@@ -1,8 +1,9 @@
+// src/components/booking/PaymentDrawer.js
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle, CreditCard, ShieldCheck, X, Loader2 } from "lucide-react";
 
-export default function PaymentDrawer({ isOpen, onClose, selectedSlot, venueName = "Arena", authToken }) {
+export default function PaymentDrawer({ isOpen, onClose, selectedSlot, venueId, venueName = "Arena", authToken }) {
   const router = useRouter();
   const [agreedToForfeit, setAgreedToForfeit] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -14,7 +15,7 @@ export default function PaymentDrawer({ isOpen, onClose, selectedSlot, venueName
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
     if (!agreedToForfeit) {
-      alert("Anda wajib menyetujui Kebijakan Hangus Mutlak 15 Menit.");
+      alert("Kebijakan Hangus Mutlak 15 Menit wajib disetujui.");
       return;
     }
     
@@ -27,9 +28,8 @@ export default function PaymentDrawer({ isOpen, onClose, selectedSlot, venueName
           "Authorization": `Bearer ${authToken}`
         },
         body: JSON.stringify({
-          slotId: selectedSlot.id,
-          time: selectedSlot.start_time,
-          date: selectedSlot.slot_date
+          venueId: venueId,
+          slotIds: [selectedSlot.id]
         })
       });
       
@@ -37,59 +37,56 @@ export default function PaymentDrawer({ isOpen, onClose, selectedSlot, venueName
       
       if (response.status === 409) {
         setCheckoutLoading(false);
-        alert(data.message || "Conflict: Slot telah dikunci oleh entitas lain.");
+        alert(data.error?.message || "Conflict: Slot telah dikunci oleh entitas lain.");
         onClose();
         return;
       }
 
-      if (!response.ok || !data.payment_token) {
-        throw new Error(data.message || "Gagal mengunci slot atau token pembayaran tidak valid.");
+      if (!response.ok || !data.data?.payment_token) {
+        throw new Error(data.error?.message || "Gagal mengamankan transaksi.");
       }
 
+      const token = data.data.payment_token;
+      const bookingId = data.data.bookingId;
+
       if (typeof window !== "undefined" && window.snap) {
-        window.snap.pay(data.payment_token, {
-          onSuccess: function (result) {
+        window.snap.pay(token, {
+          onSuccess: () => {
             setPaymentSuccess(true);
-            setTicketDetails({ ticketId: `REV-${selectedSlot.id}`, date: selectedSlot.slot_date, time: selectedSlot.start_time });
+            setTicketDetails({ ticketId: `REV-${bookingId}`, date: selectedSlot.slot_date, time: selectedSlot.start_time });
             setCheckoutLoading(false);
           },
-          onPending: function (result) {
-            alert("Menunggu pembayaran. Silakan selesaikan di halaman riwayat transaksi.");
+          onPending: () => {
+            alert("Menunggu pembayaran diselesaikan.");
             setCheckoutLoading(false);
             router.push("/profile/history");
             onClose();
           },
-          onError: function (result) {
-            alert("Pembayaran gagal atau masa tenggang kedaluwarsa.");
+          onError: () => {
+            alert("Pembayaran gagal. Kunci SLA terlepas.");
             setCheckoutLoading(false);
           },
-          onClose: function () {
-            alert("Anda menutup halaman Gateway sebelum membayar. Kunci slot akan dilepas otomatis.");
+          onClose: () => {
+            alert("Gateway ditutup. Slot akan dilepas saat Timeout Gateway tercapai.");
             setCheckoutLoading(false);
           }
         });
       } else {
-        console.warn("Midtrans Snap.js tidak terdeteksi (Fallback Mode).");
-        setTimeout(() => {
-          setPaymentSuccess(true);
-          setTicketDetails({ ticketId: `REV-${selectedSlot.id}`, date: selectedSlot.slot_date, time: selectedSlot.start_time });
-          setCheckoutLoading(false);
-        }, 1500);
+        throw new Error("Snap.js tidak terdeteksi. Matikan AdBlocker jika aktif.");
       }
-
     } catch (err) {
       console.error(err);
       setCheckoutLoading(false);
-      alert(err.message || "Kesalahan interupsi jaringan.");
+      alert(err.message || "Interupsi jaringan.");
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-end items-end md:items-stretch font-sans">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex justify-end items-end md:items-stretch font-sans">
       <div className="w-full md:max-w-md bg-zinc-950 border-t md:border-l border-zinc-800 h-auto md:h-full p-6 flex flex-col justify-between shadow-2xl relative animate-in slide-in-from-bottom md:slide-in-from-right duration-300">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition-all cursor-pointer"
+          className="absolute top-4 right-4 p-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white transition-all cursor-pointer z-10"
         >
           <X className="w-4 h-4" />
         </button>
@@ -101,7 +98,7 @@ export default function PaymentDrawer({ isOpen, onClose, selectedSlot, venueName
             </div>
             <h3 className="text-xl font-black text-white mb-2 font-display uppercase tracking-wide">Pemesanan Berhasil</h3>
             <p className="text-zinc-400 text-xs mb-6 font-sans">
-              Pembayaran cashless terkonfirmasi. Tiket Anda terbit dengan status <span className="text-brand-emerald font-bold">AKTIF</span>.
+              Pembayaran cashless terkonfirmasi. Tiket Anda terbit dengan status <span className="text-brand-emerald font-bold">CONFIRMED</span>.
             </p>
 
             <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl w-full text-left space-y-3 font-mono text-xs mb-8">
@@ -115,7 +112,7 @@ export default function PaymentDrawer({ isOpen, onClose, selectedSlot, venueName
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500">SLOT TIME</span>
-                <span className="text-white font-bold">{ticketDetails?.date}, {ticketDetails?.time}</span>
+                <span className="text-white font-bold">{ticketDetails?.date}, {ticketDetails?.time?.substring(0,5)}</span>
               </div>
             </div>
 
@@ -133,24 +130,24 @@ export default function PaymentDrawer({ isOpen, onClose, selectedSlot, venueName
                 CONFIRM RESERVATION
               </span>
               <h3 className="text-xl font-black text-white mb-6 font-display uppercase tracking-tight">
-                Detail Pembayaran Cashless
+                Detail Pembayaran
               </h3>
 
               <div className="space-y-4 mb-6 bg-zinc-900 p-5 rounded-xl border border-zinc-800 font-sans">
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-zinc-400">Lapangan</span>
-                  <span className="font-bold text-white text-right">{venueName} <br/><span className="text-[10px] text-zinc-500 font-mono">({selectedSlot?.fieldName || "Indoor Turf"})</span></span>
+                  <span className="font-bold text-white text-right">{venueName} <br/><span className="text-[10px] text-zinc-500 font-mono">({selectedSlot?.fields?.name || "Main Field"})</span></span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-zinc-400">Tanggal & Waktu</span>
+                  <span className="text-zinc-400">Jadwal</span>
                   <span className="font-mono text-white font-bold text-right">
-                    {selectedSlot?.slot_date} <br/> <span className="text-brand-emerald">{selectedSlot?.start_time}</span>
+                    {selectedSlot?.slot_date} <br/> <span className="text-brand-emerald">{selectedSlot?.start_time?.substring(0,5)} - {selectedSlot?.end_time?.substring(0,5)}</span>
                   </span>
                 </div>
                 <div className="border-t border-zinc-800 my-2 pt-4 flex justify-between items-center">
                   <span className="text-[10px] font-mono text-zinc-500 font-bold uppercase tracking-widest">TOTAL BAYAR</span>
                   <span className="font-mono text-lg font-black text-brand-emerald">
-                    Rp {(selectedSlot?.price || 150000).toLocaleString("id-ID")}
+                    Rp {Number(selectedSlot?.price || 0).toLocaleString("id-ID")}
                   </span>
                 </div>
               </div>
@@ -179,12 +176,12 @@ export default function PaymentDrawer({ isOpen, onClose, selectedSlot, venueName
                   className="mt-0.5 accent-brand-emerald w-4 h-4 rounded cursor-pointer shrink-0 border-zinc-700"
                 />
                 <label htmlFor="forfeit-checkbox" className="text-xs text-zinc-400 leading-relaxed cursor-pointer select-none font-sans">
-                  Saya menyetujui <span className="text-amber-500 font-bold">Kebijakan Forfeit 100% Dana</span> apabila terlambat masuk bermain melebihi batas toleransi <span className="text-amber-500 font-bold">&gt;15 menit</span>.
+                  Saya menyetujui <span className="text-amber-500 font-bold">Kebijakan Forfeit 100% Dana</span> apabila terlambat masuk bermain melebihi toleransi <span className="text-amber-500 font-bold">15 menit</span>.
                 </label>
               </div>
             </div>
 
-            <form onSubmit={handlePaymentSubmit} className="space-y-3">
+            <form onSubmit={handlePaymentSubmit} className="space-y-3 mt-4">
               <button
                 type="submit"
                 disabled={checkoutLoading}
@@ -195,7 +192,7 @@ export default function PaymentDrawer({ isOpen, onClose, selectedSlot, venueName
                 ) : (
                   <>
                     <ShieldCheck className="w-4 h-4" />
-                    <span>BAYAR SEKARANG</span>
+                    <span>SLA LOCK & BAYAR</span>
                   </>
                 )}
               </button>

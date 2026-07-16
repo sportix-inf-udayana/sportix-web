@@ -1,15 +1,14 @@
+// src/components/coach/OnboardingClient.js
 "use client";
-
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Image from "next/image";
 import * as z from "zod";
 import { Loader2, CheckCircle2, UserCircle, ImageOff } from "lucide-react";
-
-const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+import { getSupabase } from "@/lib/supabase";
+import { ENTITY_STATUS } from "@/lib/constants";
 
 const onboardingSchema = z.object({
   specialization: z.string().min(3, "Spesialisasi minimal 3 karakter"),
@@ -23,6 +22,7 @@ export default function OnboardingClient() {
   const router = useRouter();
   const [authError, setAuthError] = useState(null);
   const [imageError, setImageError] = useState(false);
+  const supabase = getSupabase();
 
   const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(onboardingSchema),
@@ -36,11 +36,13 @@ export default function OnboardingClient() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const payload = {
-        user_id: user.id, specialization: data.specialization,
-        price_per_hour: data.price, experience_years: data.experience,
+        user_id: user.id, 
+        specialization: data.specialization,
+        price_per_hour: data.price, 
+        experience_years: data.experience,
         bio: data.bio, 
         image_url: data.image_url && !imageError ? data.image_url : null,
-        status: 'PENDING'
+        status: ENTITY_STATUS.PENDING
       };
       
       const { error: insertErr } = await supabase.from("coaches").insert(payload);
@@ -55,15 +57,15 @@ export default function OnboardingClient() {
 
   return (
     <div className="max-w-4xl mx-auto py-12 px-6 font-sans">
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-white uppercase tracking-tight">Kualifikasi Pelatih</h1>
-        <p className="text-zinc-400 mt-2">Daftarkan spesialisasi, potret profesional, dan portofolio kepelatihan Anda.</p>
+      <div className="mb-8 border-b border-zinc-800 pb-4">
+        <h1 className="text-3xl font-black text-white font-display uppercase tracking-tight">Kualifikasi Pelatih</h1>
+        <p className="text-zinc-500 mt-1 font-mono text-xs">Daftarkan spesialisasi, potret profesional, dan portofolio kepelatihan Anda.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 space-y-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-4">
-            <div className="w-32 h-32 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center overflow-hidden relative">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-4 shadow-lg">
+            <div className="w-32 h-32 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center overflow-hidden relative shadow-inner">
               {currentImageUrl && !imageError && !errors.image_url ? (
                 <Image
                   src={currentImageUrl}
@@ -81,48 +83,54 @@ export default function OnboardingClient() {
                 </div>
               )}
             </div>
-            <p className="text-xs text-zinc-500 font-mono">Foto profil profesional Anda.</p>
+            <p className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">Foto Profil Resolusi Tinggi</p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6">
-          {authError && <div className="text-red-400 text-sm p-3 bg-red-950/20 border border-red-900/50 rounded-lg">{authError}</div>}
+        <form onSubmit={handleSubmit(onSubmit)} className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6 shadow-lg">
+          {authError && (
+            <div className="text-red-400 text-[10px] font-mono tracking-widest uppercase p-3 bg-red-950/20 border border-red-900/50 rounded-lg">
+              {authError}
+            </div>
+          )}
           
           <div className="space-y-2">
-            <label className="text-xs font-mono font-bold text-zinc-400 uppercase block">URL Foto Profil (Opsional)</label>
-            <input disabled={isSubmitting} type="text" placeholder="https://example.com/avatar.jpg" {...register("image_url")} onChange={() => setImageError(false)} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-3 px-4 text-white focus:border-brand-emerald focus:outline-none transition-colors disabled:opacity-50" />
-            {errors.image_url && <p className="text-red-400 text-xs mt-1">{errors.image_url.message}</p>}
+            <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest block">URL Foto Profil (Opsional)</label>
+            <input disabled={isSubmitting} type="text" placeholder="https://example.com/avatar.jpg" {...register("image_url")} onChange={() => setImageError(false)} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 px-4 text-white focus:border-brand-emerald focus:outline-none transition-colors disabled:opacity-50 font-mono text-sm" />
+            {errors.image_url && <p className="text-red-400 text-[10px] font-mono mt-1 uppercase">{errors.image_url.message}</p>}
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-mono font-bold text-zinc-400 uppercase block">Spesialisasi</label>
-            <input disabled={isSubmitting} type="text" {...register("specialization")} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-3 px-4 text-white focus:border-brand-emerald focus:outline-none transition-colors disabled:opacity-50" />
-            {errors.specialization && <p className="text-red-400 text-xs mt-1">{errors.specialization.message}</p>}
+            <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest block">Spesialisasi</label>
+            <input disabled={isSubmitting} type="text" {...register("specialization")} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 px-4 text-white focus:border-brand-emerald focus:outline-none transition-colors disabled:opacity-50 font-mono text-sm" />
+            {errors.specialization && <p className="text-red-400 text-[10px] font-mono mt-1 uppercase">{errors.specialization.message}</p>}
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-xs font-mono font-bold text-zinc-400 uppercase block">Tarif/Jam (IDR)</label>
-              <input disabled={isSubmitting} type="number" {...register("price")} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-3 px-4 text-white focus:border-brand-emerald focus:outline-none transition-colors disabled:opacity-50" />
-              {errors.price && <p className="text-red-400 text-xs mt-1">{errors.price.message}</p>}
+              <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest block">Tarif/Jam (IDR)</label>
+              <input disabled={isSubmitting} type="number" {...register("price")} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 px-4 text-white focus:border-brand-emerald focus:outline-none transition-colors disabled:opacity-50 font-mono text-sm" />
+              {errors.price && <p className="text-red-400 text-[10px] font-mono mt-1 uppercase">{errors.price.message}</p>}
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-mono font-bold text-zinc-400 uppercase block">Tahun Pengalaman</label>
-              <input disabled={isSubmitting} type="number" {...register("experience")} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-3 px-4 text-white focus:border-brand-emerald focus:outline-none transition-colors disabled:opacity-50" />
-              {errors.experience && <p className="text-red-400 text-xs mt-1">{errors.experience.message}</p>}
+              <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest block">Tahun Pengalaman</label>
+              <input disabled={isSubmitting} type="number" {...register("experience")} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 px-4 text-white focus:border-brand-emerald focus:outline-none transition-colors disabled:opacity-50 font-mono text-sm" />
+              {errors.experience && <p className="text-red-400 text-[10px] font-mono mt-1 uppercase">{errors.experience.message}</p>}
             </div>
           </div>
           
           <div className="space-y-2">
-            <label className="text-xs font-mono font-bold text-zinc-400 uppercase block">Deskripsi & Prestasi</label>
-            <textarea disabled={isSubmitting} rows={4} {...register("bio")} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-3 px-4 text-white focus:border-brand-emerald focus:outline-none resize-none transition-colors disabled:opacity-50" />
-            {errors.bio && <p className="text-red-400 text-xs mt-1">{errors.bio.message}</p>}
+            <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest block">Deskripsi & Prestasi</label>
+            <textarea disabled={isSubmitting} rows={4} {...register("bio")} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 px-4 text-white focus:border-brand-emerald focus:outline-none resize-none transition-colors disabled:opacity-50 font-mono text-sm" />
+            {errors.bio && <p className="text-red-400 text-[10px] font-mono mt-1 uppercase">{errors.bio.message}</p>}
           </div>
           
-          <button type="submit" disabled={isSubmitting} className="w-full py-4 bg-brand-emerald hover:bg-emerald-400 text-black rounded-xl font-bold font-mono text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer shadow-md">
-            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-            {isSubmitting ? "MENYIMPAN DATA..." : "KIRIM PENGAJUAN"}
-          </button>
+          <div className="pt-2">
+            <button type="submit" disabled={isSubmitting} className="w-full py-4 bg-brand-emerald hover:bg-emerald-400 text-black rounded-xl font-black font-mono text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer shadow-[0_0_20px_rgba(16,185,129,0.2)] tracking-widest uppercase">
+              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+              {isSubmitting ? "MENYIMPAN DATA..." : "KIRIM PENGAJUAN"}
+            </button>
+          </div>
         </form>
       </div>
     </div>

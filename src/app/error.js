@@ -1,5 +1,5 @@
+// src/app/error.js
 "use client";
-
 import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AlertOctagon, RefreshCw, Home } from "lucide-react";
@@ -8,7 +8,7 @@ export default function GlobalError({ error, reset }) {
   const router = useRouter();
 
   useEffect(() => {
-    console.error("[SPORTIX CRITICAL PANIC]:", error);
+    console.error("[SPORTIX_CRITICAL_PANIC]:", error);
   }, [error]);
 
   return (
@@ -19,14 +19,15 @@ export default function GlobalError({ error, reset }) {
         <div className="w-14 h-14 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center text-red-500 mx-auto mb-6 shadow-inner">
           <AlertOctagon className="w-6 h-6" />
         </div>
-
+        
         <h2 className="text-xl font-black font-display text-white mb-3 uppercase tracking-wide">
           Interupsi Sistem Terdeteksi
         </h2>
+        
         <p className="text-zinc-400 text-sm font-sans mb-8 leading-relaxed">
           Terjadi kegagalan pemrosesan data terintegrasi atau masa berlaku sesi otorisasi Anda telah habis. Sistem dikunci demi menjaga integritas data.
         </p>
-
+        
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={() => { reset(); router.refresh(); }}

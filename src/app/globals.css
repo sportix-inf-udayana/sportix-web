@@ -1,3 +1,4 @@
+/* src/app/globals.css */
 @import "tailwindcss/base";
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
@@ -7,7 +8,7 @@
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
   }
-  
+
   body {
     background-color: rgb(9, 9, 11);
     color: rgb(244, 244, 245);
@@ -16,7 +17,6 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
-  /* Styling selection to match the brand */
   ::selection {
     background-color: rgba(16, 185, 129, 0.3);
     color: rgb(16, 185, 129);
@@ -24,11 +24,11 @@
 }
 
 @layer utilities {
-  /* Hide scrollbar for clean UI elements while keeping functionality */
   .scrollbar-none {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
   }
+  
   .scrollbar-none::-webkit-scrollbar {
     display: none; /* Chrome, Safari and Opera */
   }
@@ -36,17 +36,8 @@
   .text-balance {
     text-wrap: balance;
   }
-
-  /* Custom glassmorphism utility */
-  .glass-panel {
-    background-color: rgba(15, 23, 42, 0.8);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgb(38, 41, 45);
-  }
 }
 
-/* Base keyframes for entry animations (if tailwindcss-animate is not installed) */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

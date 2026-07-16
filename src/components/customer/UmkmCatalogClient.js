@@ -1,9 +1,9 @@
+// src/components/customer/UmkmCatalogClient.js
 "use client";
-
 import React, { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ShoppingBag, Search, Trash2, ArrowRight, Loader2, ShieldCheck } from "lucide-react";
+import { ShoppingBag, Search, Trash2, ArrowRight, Loader2, ShieldCheck, Package } from "lucide-react";
 
 export default function UmkmCatalogClient({ initialProducts = [] }) {
   const router = useRouter();
@@ -21,7 +21,7 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
     const existing = cart.find(item => item.id === prod.id);
     if (existing) {
       if (existing.qty >= prod.stock) {
-        alert("Kuantitas melebihi sisa stok fisik toko.");
+        alert("Kuantitas melebihi sisa stok fisik.");
         return;
       }
       setCart(cart.map(item => item.id === prod.id ? { ...item, qty: item.qty + 1 } : item));
@@ -33,7 +33,6 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
   };
 
   const removeFromCart = (id) => setCart(cart.filter(item => item.id !== id));
-
   const displayTotal = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
   const handleCheckout = async () => {
@@ -50,38 +49,38 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
       });
       
       const resData = await response.json();
-      if (!response.ok || !resData.success) {
+      if (!response.ok || (!resData.data?.snapToken && !resData.snapToken)) {
         throw new Error(resData.error?.message || resData.message || "Gagal menginisialisasi pembayaran.");
       }
       
       const snapToken = resData.data?.snapToken || resData.snapToken;
-
-      if (window.snap) {
+      
+      if (typeof window !== "undefined" && window.snap) {
         window.snap.pay(snapToken, {
-          onSuccess: () => { 
-            setCart([]); 
-            setIsCartOpen(false); 
-            router.push('/profile/history'); 
-          },
-          onPending: () => { 
-            alert("Menunggu pembayaran Anda."); 
-            setIsCartOpen(false); 
-            router.push('/profile/history');
+          onSuccess: () => {
+             setCart([]);
+             setIsCartOpen(false);
+             router.push('/profile/history');
+           },
+          onPending: () => {
+             alert("Menunggu penyelesaian pembayaran.");
+             setIsCartOpen(false);
+             router.push('/profile/history');
           },
           onError: () => {
-            alert("Pembayaran gagal. Silakan coba lagi.");
+            alert("Transaksi ditolak.");
             setIsCheckingOut(false);
           },
           onClose: () => {
-            alert("Anda menutup jendela pembayaran. Transaksi dibatalkan.");
+            alert("Sesi checkout dibatalkan.");
             setIsCheckingOut(false);
           }
         });
       } else {
-        throw new Error("Midtrans Snap.js tidak termuat di browser.");
+        throw new Error("Snap.js tidak terdeteksi. Matikan AdBlocker.");
       }
     } catch (error) {
-      alert(error.message || "Terjadi kesalahan jaringan atau parameter manipulasi terdeteksi.");
+      alert(error.message || "Interupsi jaringan kritis.");
       setIsCheckingOut(false);
     }
   };
@@ -93,30 +92,31 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
           <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3.5" />
           <input
             type="text"
-            placeholder="Cari perlengkapan lokal..."
+            placeholder="Cari perlengkapan..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 focus:border-brand-emerald rounded-xl py-3 pl-10 pr-4 text-sm text-white placeholder-zinc-500 outline-none transition-all"
+            className="w-full bg-zinc-900 border border-zinc-800 focus:border-brand-emerald rounded-xl py-3 pl-10 pr-4 text-sm text-white placeholder-zinc-500 outline-none transition-all font-mono"
           />
         </div>
         <button
           onClick={() => setIsCartOpen(!isCartOpen)}
-          className="w-full md:w-auto bg-zinc-900 border border-zinc-800 hover:border-brand-emerald hover:text-white p-3 rounded-xl flex items-center justify-center gap-2 text-xs font-mono font-bold tracking-widest text-zinc-400 transition-colors shadow-sm"
+          className="w-full md:w-auto bg-zinc-900 border border-zinc-800 hover:border-brand-emerald hover:text-white p-3 rounded-xl flex items-center justify-center gap-2 text-xs font-mono font-bold tracking-widest text-zinc-400 transition-all shadow-sm cursor-pointer"
         >
           <ShoppingBag className="w-4 h-4 text-brand-emerald" />
-          <span>KERANJANG ({cart.reduce((a, b) => a + b.qty, 0)})</span>
+          <span>CART ({cart.reduce((a, b) => a + b.qty, 0)})</span>
         </button>
       </div>
 
       {filteredProducts.length === 0 ? (
-        <div className="text-center py-20 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 font-mono text-xs uppercase tracking-widest">
-          Katalog kosong atau produk tidak ditemukan.
+        <div className="text-center py-20 border border-dashed border-zinc-800 rounded-xl bg-zinc-900/30 text-zinc-500 font-mono text-xs uppercase tracking-widest flex flex-col items-center justify-center gap-3">
+          <Package className="w-8 h-8 opacity-50" />
+          <span>KATALOG KOSONG ATAU PRODUK TIDAK DITEMUKAN.</span>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {filteredProducts.map((p) => (
-            <div key={p.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col justify-between group hover:border-brand-emerald/50 transition-colors shadow-xl">
-              <div className="h-48 bg-zinc-950 overflow-hidden relative">
+            <div key={p.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col justify-between group hover:border-brand-emerald/50 transition-all shadow-lg">
+              <div className="h-48 bg-zinc-950 overflow-hidden relative border-b border-zinc-800">
                 <Image
                   src={p.image_url || p.image || "/image/hero-arena.jpg"}
                   alt={p.name}
@@ -124,29 +124,29 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
                   sizes="(max-width: 768px) 100vw, 25vw"
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
-                <span className="absolute bottom-3 right-3 bg-zinc-950/80 backdrop-blur-md border border-zinc-800 text-[10px] font-mono px-2 py-1 rounded text-white tracking-widest uppercase">
+                <span className="absolute top-3 right-3 bg-zinc-950/80 backdrop-blur-md border border-zinc-800 text-[10px] font-mono px-2 py-1 rounded text-white tracking-widest uppercase">
                   Stock: {p.stock}
                 </span>
               </div>
-              <div className="p-5 flex-1 flex flex-col justify-between">
+              <div className="p-4 flex-1 flex flex-col justify-between">
                 <div>
-                  <h4 className="text-base font-bold text-white group-hover:text-brand-emerald transition-colors font-display line-clamp-1">{p.name}</h4>
-                  <p className="text-xs text-zinc-500 leading-relaxed mt-2 mb-4 font-sans line-clamp-2">{p.description || p.desc}</p>
+                  <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest block mb-1">
+                    {p.umkm_stores?.name || "Local Merchant"}
+                  </span>
+                  <h4 className="text-sm font-bold text-white group-hover:text-brand-emerald transition-colors font-display line-clamp-1">{p.name}</h4>
+                  <p className="text-xs text-zinc-500 leading-relaxed mt-2 mb-4 font-sans line-clamp-2">{p.description || "Perlengkapan premium."}</p>
                 </div>
-                <div>
-                  <div className="flex justify-between items-center border-t border-zinc-800/60 pt-4 mt-auto">
-                    <div>
-                      <span className="text-[10px] font-mono text-zinc-500 block uppercase tracking-widest">Harga Retail</span>
-                      <span className="text-sm font-mono font-bold text-white block mt-1">Rp {Number(p.price || 0).toLocaleString("id-ID")}</span>
-                    </div>
-                    <button
-                      onClick={() => addToCart(p)}
-                      disabled={p.stock < 1}
-                      className="bg-zinc-950 border border-zinc-800 hover:bg-brand-emerald hover:text-black hover:border-brand-emerald text-white font-mono text-[10px] font-bold px-4 py-2.5 rounded-lg transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider"
-                    >
-                      {p.stock < 1 ? "HABIS" : "ADD"}
-                    </button>
+                <div className="flex justify-between items-center border-t border-zinc-800/60 pt-4 mt-auto">
+                  <div>
+                    <span className="text-sm font-mono font-bold text-white block">Rp {Number(p.price || 0).toLocaleString("id-ID")}</span>
                   </div>
+                  <button
+                    onClick={() => addToCart(p)}
+                    disabled={p.stock < 1}
+                    className="bg-zinc-950 border border-zinc-800 hover:bg-brand-emerald hover:text-black hover:border-brand-emerald text-zinc-400 font-mono text-[10px] font-bold px-4 py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider cursor-pointer"
+                  >
+                    {p.stock < 1 ? "SOLD" : "ADD"}
+                  </button>
                 </div>
               </div>
             </div>
@@ -155,11 +155,11 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
       )}
 
       {isCartOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex justify-end animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex justify-end animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-zinc-950 border-l border-zinc-800 h-full p-6 flex flex-col justify-between shadow-2xl relative slide-in-from-right-8">
             <button
               onClick={() => setIsCartOpen(false)}
-              className="absolute top-6 right-6 text-[10px] font-mono font-bold tracking-widest text-zinc-500 hover:text-white uppercase transition-colors"
+              className="absolute top-6 right-6 text-[10px] font-mono font-bold tracking-widest text-zinc-500 hover:text-white uppercase transition-colors cursor-pointer bg-zinc-900 px-2 py-1 rounded"
             >
               [X] CLOSE
             </button>
@@ -170,16 +170,16 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
               
               {cart.length === 0 ? (
                 <div className="text-center py-12 text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl uppercase tracking-widest">
-                  Keranjang Anda Kosong
+                  CART KOSONG
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {cart.map((item) => (
-                    <div key={item.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex items-center justify-between gap-3 shadow-md">
+                    <div key={item.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl flex items-center justify-between gap-3 shadow-sm">
                       <div className="flex-1">
-                        <h5 className="font-bold text-sm text-white leading-none mb-2">{item.name}</h5>
+                        <h5 className="font-bold text-xs text-white leading-none mb-1.5 line-clamp-1">{item.name}</h5>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono text-white font-bold">
+                          <span className="text-[10px] font-mono text-brand-emerald font-bold">
                             Rp {Number(item.price || 0).toLocaleString("id-ID")}
                           </span>
                           <span className="text-[10px] font-mono text-zinc-500">x {item.qty}</span>
@@ -187,10 +187,9 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
                       </div>
                       <button
                         onClick={() => removeFromCart(item.id)}
-                        className="text-zinc-500 hover:text-red-400 bg-zinc-950 border border-zinc-800 p-2.5 rounded-lg transition-colors shadow-sm"
-                        title="Hapus item"
+                        className="text-zinc-500 hover:text-red-400 bg-zinc-950 border border-zinc-800 p-2 rounded-lg transition-colors cursor-pointer"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ))}
@@ -199,26 +198,26 @@ export default function UmkmCatalogClient({ initialProducts = [] }) {
             </div>
             
             {cart.length > 0 && (
-              <div className="border-t border-zinc-800 pt-6 mt-4 space-y-5 bg-zinc-950">
-                <div className="flex justify-between items-center font-mono">
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">ESTIMASI SUBTOTAL</span>
-                  <span className="text-brand-emerald font-bold text-lg">Rp {displayTotal.toLocaleString("id-ID")}</span>
+              <div className="border-t border-zinc-800 pt-6 mt-4 space-y-4 bg-zinc-950">
+                <div className="flex justify-between items-center font-mono bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">GROSS AMOUNT</span>
+                  <span className="text-white font-black text-sm">Rp {displayTotal.toLocaleString("id-ID")}</span>
                 </div>
                 
-                <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl text-[10px] font-mono font-bold tracking-widest text-brand-emerald flex items-center justify-center gap-2 uppercase">
-                  <ShieldCheck className="w-4 h-4" /> 100% SECURE CASHLESS
+                <div className="bg-brand-emerald/10 border border-brand-emerald/20 p-3 rounded-xl text-[10px] font-mono font-bold tracking-widest text-brand-emerald flex items-center justify-center gap-2 uppercase">
+                  <ShieldCheck className="w-4 h-4" /> 100% SECURE CHECKOUT
                 </div>
-
+                
                 <button
                   onClick={handleCheckout}
                   disabled={isCheckingOut}
-                  className="w-full bg-brand-emerald hover:bg-emerald-400 text-black font-black py-4 rounded-xl text-xs flex items-center justify-center gap-2 uppercase tracking-widest font-mono transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
+                  className="w-full bg-brand-emerald hover:bg-emerald-400 text-black font-black py-4 rounded-xl text-xs flex items-center justify-center gap-2 uppercase tracking-widest font-mono transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50 disabled:shadow-none cursor-pointer"
                 >
                   {isCheckingOut ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
                     <>
-                      <span>CHECKOUT SEKARANG</span>
+                      <span>PROSES PEMBAYARAN</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

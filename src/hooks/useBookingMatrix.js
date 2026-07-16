@@ -1,32 +1,26 @@
+// src/hooks/useBookingMatrix.js
 import { useState, useCallback } from "react";
-import { createBrowserClient } from "@supabase/ssr";
-import { getAvailableSlots } from "@/lib/services/venue.service";
-
-// Inisialisasi di luar komponen agar tidak terjadi re-instantiation
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+import { fetchAvailableSlotsAction } from "@/app/(customer)/booking/[venueId]/_actions";
+import { getSupabase } from "@/lib/supabase"; 
 
 export function useBookingMatrix(venueId) {
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' }));
   const [slots, setSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [errorLog, setErrorLog] = useState(null);
-  
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [activeToken, setActiveToken] = useState(null);
 
   const fetchSlotsForDate = useCallback(async (dateStr) => {
     setLoadingSlots(true);
     setErrorLog(null);
-    setSelectedSlot(null); 
+    setSelectedSlot(null);
 
     try {
-      const { slots: fetchedSlots, error } = await getAvailableSlots(supabase, venueId, dateStr);
+      const { data, error } = await fetchAvailableSlotsAction(venueId, dateStr);
       if (error) throw new Error(error);
-      setSlots(fetchedSlots);
+      setSlots(data || []);
     } catch (err) {
       setErrorLog(err.message);
     } finally {
@@ -37,14 +31,14 @@ export function useBookingMatrix(venueId) {
   const initiatePayment = async () => {
     if (!selectedSlot) return;
     setErrorLog(null);
-
     try {
+      const supabase = getSupabase();
       const { data: { session }, error } = await supabase.auth.getSession();
       
       if (error || !session) {
         throw new Error("Otorisasi terputus. Sesi Anda tidak valid, harap log in kembali.");
       }
-
+      
       setActiveToken(session.access_token);
       setIsDrawerOpen(true);
     } catch (err) {
@@ -55,7 +49,7 @@ export function useBookingMatrix(venueId) {
 
   const closeDrawer = () => {
     setIsDrawerOpen(false);
-    fetchSlotsForDate(selectedDate); // Refresh ketersediaan slot setelah transaksi
+    fetchSlotsForDate(selectedDate);
   };
 
   return {

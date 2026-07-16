@@ -1,7 +1,9 @@
+// src/components/booking/SlotGrid.js
 import React from "react";
-import { Lock, CheckCircle2, Clock } from "lucide-react";
+import { Lock, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { SLOT_STATUS } from "@/lib/constants";
 
 const cn = (...inputs) => twMerge(clsx(inputs));
 
@@ -18,9 +20,10 @@ export default function SlotGrid({ slots, selectedSlot, onSelectSlot }) {
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 font-sans">
       {slots.map((slot) => {
         const isSelected = selectedSlot?.id === slot.id;
-        const isAvailable = slot.status === "AVAILABLE";
-        const isLocked = slot.status === "LOCKED";
-        const isBooked = slot.status === "BOOKED";
+        const isAvailable = slot.status === SLOT_STATUS.AVAILABLE;
+        const isLocked = slot.status === SLOT_STATUS.LOCKED;
+        const isBooked = slot.status === SLOT_STATUS.BOOKED;
+        const isUnavailable = slot.status === SLOT_STATUS.UNAVAILABLE;
 
         return (
           <button
@@ -32,7 +35,7 @@ export default function SlotGrid({ slots, selectedSlot, onSelectSlot }) {
               isAvailable ? "cursor-pointer hover:border-brand-emerald/50 hover:bg-zinc-800" : "cursor-not-allowed opacity-80",
               isSelected ? "bg-brand-emerald/10 border-brand-emerald shadow-[0_0_15px_rgba(16,185,129,0.15)] scale-[1.02]" : "bg-zinc-900 border-zinc-800",
               isLocked && "bg-amber-950/20 border-amber-900/30",
-              isBooked && "bg-zinc-950 border-zinc-900"
+              (isBooked || isUnavailable) && "bg-zinc-950 border-zinc-900"
             )}
           >
             <span className={cn(
@@ -49,9 +52,11 @@ export default function SlotGrid({ slots, selectedSlot, onSelectSlot }) {
               )}>
                 {isSelected ? "TERPILIH" : slot.status}
               </span>
+              
               {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-brand-emerald" />}
               {isLocked && <Clock className="w-3.5 h-3.5 text-amber-500 animate-pulse" />}
               {isBooked && <Lock className="w-3 h-3 text-zinc-700" />}
+              {isUnavailable && <XCircle className="w-3 h-3 text-red-900" />}
             </div>
           </button>
         );

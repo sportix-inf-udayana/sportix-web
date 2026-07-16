@@ -1,3 +1,4 @@
+// tailwind.config.js
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -9,7 +10,7 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          emerald: "#10b981", // Warna utama Sportix
+          emerald: "#10b981", 
         }
       },
       fontFamily: {

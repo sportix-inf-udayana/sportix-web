@@ -1,37 +1,39 @@
+// src/components/admin-venue/ReportSummaryCards.js
+import React from "react";
+
 export default function ReportSummaryCards({ summary }) {
-  // Fallback aman jika summary undefined
   const data = summary || { revenue: 0, successful: 0, pending: 0, totalTransactions: 0 };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {/* Revenue Card */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center">
-        <span className="text-sm font-medium text-gray-500 mb-1">Total Revenue</span>
-        <span className="text-2xl font-bold text-gray-900">
-          Rp {data.revenue.toLocaleString('id-ID')}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 font-sans">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-brand-emerald" />
+        <span className="text-[10px] font-mono text-zinc-500 block uppercase mb-1 tracking-widest font-bold">Gross Revenue</span>
+        <span className="text-2xl font-black text-white font-mono">
+          Rp {Number(data.revenue).toLocaleString('id-ID')}
         </span>
       </div>
-
-      {/* Successful Transactions */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center">
-        <span className="text-sm font-medium text-gray-500 mb-1">Successful Bookings</span>
-        <span className="text-2xl font-bold text-green-600">
+      
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-blue-500" />
+        <span className="text-[10px] font-mono text-zinc-500 block uppercase mb-1 tracking-widest font-bold">Settled Bookings</span>
+        <span className="text-2xl font-black text-blue-400 font-mono">
           {data.successful}
         </span>
       </div>
-
-      {/* Pending Transactions */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center">
-        <span className="text-sm font-medium text-gray-500 mb-1">Pending Bookings</span>
-        <span className="text-2xl font-bold text-yellow-600">
+      
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-amber-500" />
+        <span className="text-[10px] font-mono text-zinc-500 block uppercase mb-1 tracking-widest font-bold">Pending Hooks</span>
+        <span className="text-2xl font-black text-amber-500 font-mono">
           {data.pending}
         </span>
       </div>
-
-      {/* Total Transactions */}
-      <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center">
-        <span className="text-sm font-medium text-gray-500 mb-1">Total Transactions</span>
-        <span className="text-2xl font-bold text-gray-900">
+      
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-zinc-600" />
+        <span className="text-[10px] font-mono text-zinc-500 block uppercase mb-1 tracking-widest font-bold">Total Operations</span>
+        <span className="text-2xl font-black text-zinc-300 font-mono">
           {data.totalTransactions}
         </span>
       </div>
