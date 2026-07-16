@@ -1,3 +1,4 @@
+// src/components/booking/DateCarousel.js
 import React from "react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -5,7 +6,6 @@ import { twMerge } from "tailwind-merge";
 const cn = (...inputs) => twMerge(clsx(inputs));
 
 export default function DateCarousel({ selectedDate, onSelectDate }) {
-  // Generate kalender dinamis 14 hari ke depan
   const dates = Array.from({ length: 14 }).map((_, i) => {
     const d = new Date();
     d.setDate(d.getDate() + i);
@@ -29,7 +29,7 @@ export default function DateCarousel({ selectedDate, onSelectDate }) {
               "snap-start shrink-0 flex flex-col items-center justify-center w-16 h-20 rounded-2xl border transition-all cursor-pointer font-mono",
               isSelected
                 ? "bg-brand-emerald text-black border-brand-emerald shadow-[0_0_15px_rgba(16,185,129,0.2)] scale-105"
-                : "bg-zinc-900 text-zinc-500 border-zinc-800 hover:border-zinc-700 hover:text-white"
+                : "bg-zinc-950 text-zinc-500 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900 hover:text-white"
             )}
           >
             <span className="text-[10px] uppercase font-bold tracking-wider mb-1">{d.dayName}</span>

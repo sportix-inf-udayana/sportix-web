@@ -1,6 +1,8 @@
+// src/app/profile/page.js
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { redirect } from "next/navigation";
+import { APP_CONFIG, USER_ROLES } from "@/lib/constants";
 
 export const dynamic = 'force-dynamic';
 
@@ -13,24 +15,19 @@ export default async function UnifiedProfilePage() {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect(APP_CONFIG.routes.auth.login);
 
-  if (!user) redirect("/login");
-
-  const role = user.user_metadata?.role || "CUSTOMER";
+  const role = user.user_metadata?.role || USER_ROLES.CUSTOMER;
 
   switch (role) {
-    case "SUPER_ADMIN":
-      redirect("/super-admin/audits?view=profile");
-      break;
-    case "ADMIN_VENUE":
-      redirect("/admin-venue/reports?view=profile");
-      break;
-    case "COACH":
-      redirect("/coach/wallet?view=profile");
-      break;
-    case "UMKM_SELLER":
-      redirect("/seller-umkm/products?view=profile");
-      break;
+    case USER_ROLES.SUPER_ADMIN:
+      redirect(`${APP_CONFIG.routes.protected.superAdmin}/audits?view=profile`);
+    case USER_ROLES.ADMIN_VENUE:
+      redirect(`${APP_CONFIG.routes.protected.admin}/reports?view=profile`);
+    case USER_ROLES.COACH:
+      redirect(`${APP_CONFIG.routes.protected.coach}/wallet?view=profile`);
+    case USER_ROLES.UMKM_SELLER:
+      redirect(`${APP_CONFIG.routes.protected.seller}/products?view=profile`);
     default:
       redirect("/profile/history");
   }

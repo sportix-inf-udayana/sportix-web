@@ -1,8 +1,9 @@
+// src/app/(dashboard)/seller-umkm/products/page.js
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
-import ProductCatalogClient from "../../../../components/umkm/ProductCatalogClient";
-import { USER_ROLES, ENTITY_STATUS } from "../../../../lib/constants";
+import ProductCatalogClient from "@/components/umkm/ProductCatalogClient";
+import { USER_ROLES, ENTITY_STATUS, APP_CONFIG } from "@/lib/constants";
 
 export const dynamic = 'force-dynamic';
 
@@ -15,16 +16,24 @@ export default async function UmkmProductsPage() {
   );
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user || user.user_metadata?.role !== USER_ROLES.UMKM_SELLER) redirect("/login");
+  if (authError || !user || user.user_metadata?.role !== USER_ROLES.UMKM_SELLER) {
+    redirect(APP_CONFIG.routes.auth.login);
+  }
 
-  // PROTEKSI ONBOARDING
-  const { data: store } = await supabase.from("umkm_stores").select("status").eq("owner_id", user.id).maybeSingle();
+  const { data: store } = await supabase
+    .from("umkm_stores")
+    .select("id, status")
+    .eq("owner_id", user.id)
+    .maybeSingle();
+
   if (!store) redirect("/seller-umkm/onboarding");
   if (store.status === ENTITY_STATUS.PENDING) redirect("/seller-umkm/pending");
+  if (store.status === ENTITY_STATUS.REJECTED) redirect("/seller-umkm/onboarding");
 
   const { data: products, error: productError } = await supabase
     .from("umkm_products")
-    .select("id, name, price, stock, description, image_url, status")
+    .select("id, name, price, stock, description, image_url, is_active")
+    .eq("store_id", store.id)
     .order("created_at", { ascending: false });
 
   if (productError) {

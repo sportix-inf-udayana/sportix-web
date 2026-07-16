@@ -1,6 +1,15 @@
+// src/middleware.js
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import { APP_CONFIG } from '@/lib/constants';
+
+const ROLE_MAP = {
+  SUPER_ADMIN: APP_CONFIG.routes.protected.superAdmin,
+  ADMIN_VENUE: APP_CONFIG.routes.protected.admin,
+  COACH: APP_CONFIG.routes.protected.coach,
+  UMKM_SELLER: APP_CONFIG.routes.protected.seller,
+  CUSTOMER: APP_CONFIG.routes.protected.customer,
+};
 
 export async function middleware(request) {
   let supabaseResponse = NextResponse.next({
@@ -12,10 +21,8 @@ export async function middleware(request) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookiesToSet) => {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({
             request: { headers: request.headers },
@@ -30,19 +37,21 @@ export async function middleware(request) {
 
   const { data: { user } } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
+  
+  const isPublicRoute = APP_CONFIG.routes.public.some(route => pathname === route || pathname.startsWith('/api/payments/webhook'));
+  const isAuthRoute = pathname === APP_CONFIG.routes.auth.login || pathname === APP_CONFIG.routes.auth.register;
 
-  const isPublicRoute = APP_CONFIG.routes.public.includes(pathname);
-
-  if (!user && !isPublicRoute) {
+  if (!user && !isPublicRoute && !isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = APP_CONFIG.routes.auth.login;
     return NextResponse.redirect(url);
   }
 
-  // Mencegah user login mengakses halaman otentikasi kembali
-  if (user && (pathname === APP_CONFIG.routes.auth.login || pathname === APP_CONFIG.routes.auth.register)) {
+  if (user && isAuthRoute) {
+    const role = user.user_metadata?.role || 'CUSTOMER';
+    const target = ROLE_MAP[role] || ROLE_MAP.CUSTOMER;
     const url = request.nextUrl.clone();
-    url.pathname = APP_CONFIG.routes.protected.customer; // Atau logic routing dinamis berdasarkan role user
+    url.pathname = target;
     return NextResponse.redirect(url);
   }
 

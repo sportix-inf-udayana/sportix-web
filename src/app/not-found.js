@@ -1,3 +1,4 @@
+// src/app/not-found.js
 import Link from "next/link";
 import { FileQuestion, MoveLeft } from "lucide-react";
 
@@ -10,14 +11,15 @@ export default function NotFound() {
         <div className="w-14 h-14 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center text-brand-emerald mx-auto mb-6 shadow-inner">
           <FileQuestion className="w-6 h-6" />
         </div>
-
+        
         <h2 className="text-xl font-black font-display text-white mb-3 uppercase tracking-wide">
           Halaman Tidak Ditemukan
         </h2>
+        
         <p className="text-zinc-400 text-sm font-sans mb-8 leading-relaxed">
           Tautan atau rute enklaf yang Anda tuju tidak valid atau berada di luar yurisdiksi hak akses akun Anda di dalam ekosistem Sportix.
         </p>
-
+        
         <Link
           href="/profile"
           className="w-full bg-white hover:bg-zinc-200 text-black py-3.5 rounded-xl text-xs font-mono font-bold tracking-widest flex items-center justify-center gap-2 transition-all shadow-md uppercase"

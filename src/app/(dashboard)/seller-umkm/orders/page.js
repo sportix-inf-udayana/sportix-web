@@ -1,8 +1,9 @@
+// src/app/(dashboard)/seller-umkm/orders/page.js
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
-import ShipmentDispatcherClient from "../../../../components/umkm/ShipmentDispatcherClient";
-import { USER_ROLES, ENTITY_STATUS } from "../../../../lib/constants";
+import ShipmentDispatcherClient from "@/components/umkm/ShipmentDispatcherClient";
+import { USER_ROLES, ENTITY_STATUS, APP_CONFIG } from "@/lib/constants";
 
 export const dynamic = 'force-dynamic';
 
@@ -15,27 +16,35 @@ export default async function UmkmOrdersPage() {
   );
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user || user.user_metadata?.role !== USER_ROLES.UMKM_SELLER) redirect("/login");
+  if (authError || !user || user.user_metadata?.role !== USER_ROLES.UMKM_SELLER) {
+    redirect(APP_CONFIG.routes.auth.login);
+  }
 
-  // PROTEKSI ONBOARDING/PENDING
-  const { data: store } = await supabase.from("umkm_stores").select("status").eq("owner_id", user.id).maybeSingle();
+  const { data: store } = await supabase
+    .from("umkm_stores")
+    .select("id, status")
+    .eq("owner_id", user.id)
+    .maybeSingle();
+
   if (!store) redirect("/seller-umkm/onboarding");
   if (store.status === ENTITY_STATUS.PENDING) redirect("/seller-umkm/pending");
+  if (store.status === ENTITY_STATUS.REJECTED) redirect("/seller-umkm/onboarding");
 
   const { data: orders, error: orderError } = await supabase
     .from("umkm_orders")
-    .select("id, status, total_price, created_at, quantity, umkm_products(name, image_url), users(raw_user_meta_data)")
+    .select("id, status, total_price, created_at, quantity, delivery_address, umkm_products(name, image_url), profiles(full_name)")
+    .eq("store_id", store.id)
     .order("created_at", { ascending: false });
 
   if (orderError) {
-    return <div className="text-red-400 p-4 font-mono text-sm">[ERROR]: {orderError.message}</div>;
+    return <div className="text-red-400 p-4 font-mono text-sm bg-red-950/20 border border-red-900 rounded-lg">[ERROR]: {orderError.message}</div>;
   }
 
   return (
     <div className="space-y-6 w-full text-white">
       <div className="border-b border-zinc-800 pb-4">
         <h1 className="text-2xl font-black text-white font-display uppercase">Manajemen Pesanan Logistik</h1>
-        <p className="text-zinc-500 text-xs font-mono mt-1">Pusat komando logistik UMKM.</p>
+        <p className="text-zinc-500 text-xs font-mono mt-1">Pusat komando pengiriman terdesentralisasi.</p>
       </div>
       <ShipmentDispatcherClient initialOrders={orders || []} />
     </div>

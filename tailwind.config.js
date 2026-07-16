@@ -1,3 +1,4 @@
+// tailwind.config.js
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -7,23 +8,16 @@ module.exports = {
   ],
   theme: {
     extend: {
-      fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ["Space Grotesk", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "monospace"],
-      },
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
         brand: {
           emerald: "#10b981", 
-          amber: "#f59e0b",   
         }
       },
-      fontSize: {
-        micro: ["0.625rem", { lineHeight: '0.875rem' }], // 10px
-        tiny: ["0.6875rem", { lineHeight: '1rem' }],     // 11px
-      }
+      fontFamily: {
+        sans: ['var(--font-sans)', 'sans-serif'],
+        mono: ['var(--font-mono)', 'monospace'],
+        display: ['var(--font-display)', 'sans-serif'],
+      },
     },
   },
   plugins: [],

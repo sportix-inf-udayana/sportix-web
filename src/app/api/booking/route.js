@@ -1,18 +1,19 @@
 // src/app/api/booking/route.js
-import { withApiHandler } from '@/lib/api-wrapper';
+import { z } from 'zod';
+import { withAuthAndCatch } from '@/lib/api-wrapper';
 import { BookingService } from '@/lib/services/booking.service';
-import { validateBookingPayload } from '@/lib/validators/booking.validator';
 
-export const POST = withApiHandler(async (req) => {
-  const rawBody = await req.json();
+const bookingSchema = z.object({
+  venueId: z.string().uuid(),
+  slotIds: z.array(z.string().uuid()).min(1)
+});
 
-  // 1. Delegasikan validasi ke layer terpisah. 
-  // Jika gagal, fungsi ini akan otomatis melempar AppError 400.
-  const validatedData = validateBookingPayload(rawBody);
-
-  // 2. Lempar ke Service Layer
-  const bookingResult = await BookingService.processBooking(validatedData);
-
-  // 3. Return ke klien
-  return bookingResult;
+export const POST = withAuthAndCatch(async (req, { user }) => {
+  const payload = bookingSchema.parse(await req.json());
+  
+  return await BookingService.processBooking({
+    venueId: payload.venueId,
+    slotIds: payload.slotIds,
+    userId: user.id
+  });
 });
