@@ -1,3 +1,4 @@
+// src/app/(dashboard)/admin-venue/onboarding/page.js
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -16,7 +17,7 @@ export default async function VenueOnboardingPage() {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   if (!user) {
     redirect('/login');
   }
@@ -33,9 +34,6 @@ export default async function VenueOnboardingPage() {
     if (venue.status === 'approved' || venue.is_active) redirect('/admin-venue');
   }
 
-  return (
-    <main className="min-h-screen bg-gray-50 p-6">
-      <OnboardingClient />
-    </main>
-  );
+  // Komponen UI diletakkan langsung, Layout.js yang akan mengurus container-nya
+  return <OnboardingClient />;
 }

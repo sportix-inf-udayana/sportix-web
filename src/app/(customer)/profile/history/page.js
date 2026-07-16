@@ -20,6 +20,7 @@ export default async function HistoryPage() {
   );
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
+
   if (authError || !user) {
     redirect(APP_CONFIG.routes.auth.login);
   }
@@ -43,14 +44,14 @@ export default async function HistoryPage() {
   };
 
   return (
-    <main className="max-w-4xl mx-auto p-4 md:p-6 font-sans">
+    <main className="max-w-7xl mx-auto px-6 py-8 font-sans w-full flex-1 flex flex-col">
       <div className="mb-8">
         <h1 className="text-2xl font-black text-white font-display uppercase tracking-tight">Riwayat Transaksi</h1>
         <p className="text-zinc-500 text-xs font-mono mt-1">Daftar booking arena dan pembayaran terdesentralisasi Anda.</p>
       </div>
 
       {historyData.length === 0 ? (
-        <div className="bg-zinc-900 p-8 rounded-xl border border-dashed border-zinc-800 text-center">
+        <div className="bg-zinc-900 p-8 rounded-xl border border-dashed border-zinc-800 text-center flex-1 flex flex-col items-center justify-center min-h-[300px]">
           <p className="text-zinc-500 font-mono text-xs tracking-widest uppercase">Belum ada transaksi ditemukan.</p>
         </div>
       ) : (

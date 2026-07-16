@@ -1,3 +1,4 @@
+// next.config.mjs
 /** @type {import('next').NextConfig} */
 
 const getSupabaseHostname = () => {
@@ -5,7 +6,6 @@ const getSupabaseHostname = () => {
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return "*.supabase.co";
     return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname;
   } catch (error) {
-    console.warn("Peringatan Sistem: URL Supabase tidak valid, menggunakan domain fallback.");
     return "*.supabase.co";
   }
 };

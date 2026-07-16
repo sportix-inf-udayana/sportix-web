@@ -9,6 +9,7 @@ const SERVER_KEY = process.env.MIDTRANS_SERVER_KEY ? Buffer.from(`${process.env.
 export class BookingService {
   static async processBooking({ venueId, slotIds, userId }) {
     if (!SERVER_KEY) throw new AppError("Gateway config error.", 500);
+
     const supabase = getSupabaseAdmin();
 
     const { data: slots, error: fetchErr } = await supabase
@@ -112,6 +113,7 @@ export class BookingService {
     const segments = order_id.split('-');
     const prefix = segments[0];
     const entityId = segments[1];
+
     const supabase = getSupabaseAdmin();
 
     if (prefix === 'REV') {
@@ -147,7 +149,8 @@ export class BookingService {
       }
     } else if (prefix === 'MKM') {
       if (['settlement', 'capture'].includes(transaction_status) && (fraud_status === 'accept' || !fraud_status)) {
-        await supabase.from('umkm_orders').update({ status: 'PAID' }).eq('id', entityId);
+        // LOGIC FIX: Sinkronisasi dengan UI Seller yang mengharapkan 'PREPARING'
+        await supabase.from('umkm_orders').update({ status: 'PREPARING' }).eq('id', entityId);
       } else if (['cancel', 'deny', 'expire'].includes(transaction_status)) {
         await supabase.from('umkm_orders').update({ status: 'CANCELLED' }).eq('id', entityId);
       }

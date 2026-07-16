@@ -27,9 +27,15 @@ export const POST = withAuthAndCatch(async (req, { user }) => {
   const newStatus = payload.action === 'APPROVE' ? ENTITY_STATUS.APPROVED : ENTITY_STATUS.REJECTED;
   const targetTable = TABLE_MAP[payload.entityType];
 
+  // LOGIC FIX: Jika entitas Venue disetujui, paksa is_active menjadi true
+  const updatePayload = { status: newStatus };
+  if (payload.entityType === 'VENUE' && newStatus === ENTITY_STATUS.APPROVED) {
+    updatePayload.is_active = true;
+  }
+
   const { data, error } = await supabase
     .from(targetTable)
-    .update({ status: newStatus })
+    .update(updatePayload)
     .eq('id', payload.entityId)
     .select('id')
     .single();
